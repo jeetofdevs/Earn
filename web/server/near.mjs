@@ -19,14 +19,12 @@ export function isAccountId(a) {
   );
 }
 
-/** True if a recent round on the contract was already drawn for `batch`. */
+/** True if the contract already drew (or is drawing) `batch`. */
 export async function batchAlreadyDrawn(batch) {
-  const [rounds, pending] = await Promise.all([
-    gacha("get_rounds", { limit: 50 }),
-    gacha("get_pending_draw"),
-  ]);
+  const [stats, pending] = await Promise.all([gacha("get_stats"), gacha("get_pending_draw")]);
   return Boolean(
-    (pending && Number(pending.batch) === batch) || rounds.some((r) => r.batch !== null && Number(r.batch) === batch),
+    (pending && pending.batch !== null && Number(pending.batch) === batch) ||
+      (stats.last_batch !== null && Number(stats.last_batch) >= batch),
   );
 }
 

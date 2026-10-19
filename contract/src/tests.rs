@@ -242,3 +242,23 @@ fn cannot_withdraw_reserve() {
     testing_env!(ctx(&owner()).build());
     let _ = c.withdraw_near(Some(U128(10 * ONE_NEAR)));
 }
+
+#[test]
+#[should_panic(expected = "This batch was already drawn")]
+fn batch_cannot_be_drawn_twice() {
+    let mut c = setup();
+    start_draw(&mut c, holders(3)); // batch 42
+    c.cancel_pending_draw();
+    testing_env!(ctx(&owner()).build());
+    let _ = c.draw(holders(3), Some(U64(42)));
+}
+
+#[test]
+fn later_batch_can_be_drawn() {
+    let mut c = setup();
+    start_draw(&mut c, holders(3)); // batch 42
+    c.cancel_pending_draw();
+    testing_env!(ctx(&owner()).build());
+    let _ = c.draw(holders(3), Some(U64(43)));
+    assert_eq!(c.get_stats().last_batch, Some(U64(43)));
+}

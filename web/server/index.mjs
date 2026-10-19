@@ -117,6 +117,8 @@ async function api(req, res, url) {
 function serveStatic(req, res, url) {
   let path = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, "");
   let file = join(DIST, path);
+  // Pretty URLs: /owner -> owner.html
+  if (existsSync(file + ".html")) file += ".html";
   if (!file.startsWith(DIST) || !existsSync(file) || statSync(file).isDirectory()) file = join(DIST, "index.html");
   if (!existsSync(file)) return send(res, 503, { error: "Site not built. Run npm run build." });
   const type = TYPES[extname(file)] || "application/octet-stream";

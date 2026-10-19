@@ -52,7 +52,7 @@ hash of the list it drew from, so anyone can check it against `/api/batches/<id>
 | Method | Who | Notes |
 |---|---|---|
 | `new(owner_id, token_id, min_hold, winners_per_draw?)` | deploy | `winners_per_draw` defaults to 10 |
-| `draw(holders, batch?)` | owner | attach 300 Tgas; max 5,000 accounts |
+| `draw(holders, batch?)` | owner | attach 300 Tgas; max 5,000 accounts; each batch once |
 | `ft_on_transfer` | token | accepts $EARN into the pool, returns other tokens |
 | `withdraw_near(amount?)` | owner | spare NEAR only (keeps 0.5 NEAR reserve + storage) |
 | `add_excluded`, `remove_excluded` | owner | e.g. liquidity pools, exchanges, team wallets |
@@ -64,7 +64,7 @@ hash of the list it drew from, so anyone can check it against `/api/batches/<id>
 
 ```bash
 cd contract
-cargo test                                # 14 unit tests
+cargo test                                # 16 unit tests
 cargo near build non-reproducible-wasm    # needs: cargo install cargo-near
 
 near account create-account fund-myself gacha.YOUR-TOKEN.near '1 NEAR' autogenerate-new-keypair save-to-keychain sign-as YOUR-TOKEN.near network-config mainnet sign-with-keychain send
@@ -100,6 +100,13 @@ The repo has a `Dockerfile` and `railway.json` at the root (and a root
 
 ## 3. Pull the gacha
 
+**Owner page (wallet connect, no private key on the server):** open
+`https://<your-site>/owner`. It isn't linked anywhere and is hidden from search
+engines. Connect the owner wallet (Meteor or HERE), pick a closed batch and
+click **Pull gacha**. Anyone else who finds the page can't draw, because the
+contract only accepts `draw` from the owner. You can also withdraw spare NEAR
+there.
+
 **Automatic:** with `AUTO_DRAW=true` the server draws each batch about 15–35
 seconds after it closes. Empty batches are skipped.
 
@@ -114,7 +121,8 @@ npm run draw                # draw it and pay winners
 npm run draw -- --batch 995792
 ```
 
-A batch can't be drawn twice: both the CLI and the server check the contract first.
+A batch can't be drawn twice: the contract rejects a batch number that isn't
+newer than the last one drawn.
 
 ## Local development
 

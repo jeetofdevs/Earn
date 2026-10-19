@@ -166,3 +166,12 @@ footer { text-align: center; color: #2a1405; font-size: 13px; padding: 20px 16px
 .knob { cursor: default; }
 .winners li a { color: var(--ink); text-decoration: none; font-weight: 500; }
 .pill { border: 3px solid var(--ink); border-radius: 999px; padding: 4px 12px; font-weight: 700; background: var(--orange); }
+
+/* owner page */
+.batches { display: grid; gap: 10px; margin: 6px 0 10px; }
+.batch { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 16px; border: 3px solid var(--ink); border-radius: 16px; background: #fff3e8; }
+.batch div { display: flex; flex-direction: column; }
+.batch small { color: var(--muted); }
+.note.left { text-align: left; max-width: none; }
+.note.ok { color: #0a7a3b; font-weight: 700; }
+.note.err { color: #b00020; font-weight: 700; }

@@ -108,6 +108,8 @@ pub struct Stats {
     /// Total $EARN paid to holders.
     pub total_paid: U128,
     pub last_draw_at: U64,
+    /// Highest batch drawn so far.
+    pub last_batch: Option<U64>,
     pub draw_in_progress: bool,
 }
 
@@ -124,6 +126,8 @@ pub struct EarnGacha {
     rounds: Vector<Round>,
     pending: Option<PendingDraw>,
     total_paid: u128,
+    /// Highest batch number drawn so far; each batch can be drawn only once.
+    last_batch: Option<u64>,
 }
 
 #[near]
@@ -147,6 +151,7 @@ impl EarnGacha {
             rounds: Vector::new(StorageKey::Rounds),
             pending: None,
             total_paid: 0,
+            last_batch: None,
         }
     }
 
@@ -184,6 +189,9 @@ impl EarnGacha {
         require!(self.pending.is_none(), "A draw is already in progress");
         require!(!holders.is_empty(), "Holder list is empty");
         require!(holders.len() <= MAX_SNAPSHOT, "Holder list too long (max 5000)");
+        if let Some(b) = batch {
+            require!(self.last_batch.map_or(true, |last| b.0 > last), "This batch was already drawn");
+        }
 
         let now = env::block_timestamp();
         let round_id = self.rounds.len();
@@ -200,6 +208,9 @@ impl EarnGacha {
         );
         require!(!candidates.is_empty(), "No eligible holders in the list");
 
+        if let Some(b) = batch {
+            self.last_batch = Some(b.0);
+        }
         self.pending = Some(PendingDraw {
             round_id,
             candidates: candidates.clone(),
@@ -377,6 +388,7 @@ impl EarnGacha {
             rounds: self.rounds.len(),
             total_paid: U128(self.total_paid),
             last_draw_at: U64(self.last_draw_ns),
+            last_batch: self.last_batch.map(U64),
             draw_in_progress: self.pending.is_some(),
         }
     }
