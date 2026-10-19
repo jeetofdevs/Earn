@@ -1,5 +1,5 @@
 import "./style.css";
-import { CONTRACT_ID, EXPLORER_URL } from "./config.js";
+import { CONTRACT_ID, EXPLORER_URL, TOKEN_ID } from "./config.js";
 import { formatUnits, gacha, view } from "./near.js";
 
 const $ = (id) => document.getElementById(id);
@@ -209,8 +209,23 @@ async function join(e) {
 
 // ---------------------------------------------------------------- boot
 
+function showCa() {
+  $("ca").textContent = TOKEN_ID;
+  $("ca-link").href = `${EXPLORER_URL}/token/${TOKEN_ID}`;
+  $("ca-copy").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(TOKEN_ID);
+      $("ca-copy").textContent = "Copied ✓";
+    } catch {
+      $("ca-copy").textContent = "Copy failed";
+    }
+    setTimeout(() => ($("ca-copy").textContent = "Copy"), 1500);
+  };
+}
+
 async function main() {
   fillDome();
+  showCa();
   if (!CONTRACT_ID) {
     $("status").textContent = "EARN Gacha will be live soon.";
     $("join-timer").textContent = "Will be live soon";

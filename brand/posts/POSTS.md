@@ -1,7 +1,7 @@
 # EARN — launch posts for X
 
 Images are 1200×675 (shows uncropped on X). Before posting, replace
-`[CA]` with the $EARN token contract and `[WEBSITE]` with the site URL.
+`[WEBSITE]` with the site URL.
 
 ## Post 1 — Launch + CA (image: 1-launch.png)
 
@@ -10,7 +10,7 @@ $EARN is live on @NEARProtocol 🦉
 100% of creator fees go back to holders.
 Paid in $EARN. Every 30 minutes.
 
-CA: [CA]
+CA: earn.v2-launchpad.justhoot.near
 
 🌐 [WEBSITE]
 

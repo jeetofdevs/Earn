@@ -4,6 +4,8 @@
 
 **100% of creator fees, paid in $EARN, to 10 random holders every 30 minutes.**
 
+**$EARN CA:** `earn.v2-launchpad.justhoot.near` (NEAR mainnet)
+
 1. **Hold $EARN.**
 2. **Submit your wallet address** on the website. No wallet connect, nothing to sign. Do it once per batch.
 3. **Every 30 minutes** the batch closes and the gacha is pulled: 10 random wallets from that batch split the whole $EARN prize pool.
@@ -72,7 +74,7 @@ near account create-account fund-myself gacha.YOUR-TOKEN.near '1 NEAR' autogener
 near contract deploy gacha.YOUR-TOKEN.near use-file target/near/earn_gacha.wasm \
   with-init-call new json-args '{
     "owner_id": "YOU.near",
-    "token_id": "YOUR-TOKEN.near",
+    "token_id": "earn.v2-launchpad.justhoot.near",
     "min_hold": "1000000000000000000000"
   }' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' network-config mainnet sign-with-keychain send
 ```
@@ -80,7 +82,7 @@ near contract deploy gacha.YOUR-TOKEN.near use-file target/near/earn_gacha.wasm 
 - `min_hold` is in the token's smallest unit (example = 1,000 tokens with 18 decimals).
 - Keep at least 1 NEAR on the contract account for storage and gas.
 - **Register the contract on the $EARN token** so it can receive $EARN:
-  `near contract call-function as-transaction YOUR-TOKEN.near storage_deposit json-args '{"account_id":"gacha.YOUR-TOKEN.near"}' prepaid-gas '30 Tgas' attached-deposit '0.01 NEAR' ...`
+  `near contract call-function as-transaction earn.v2-launchpad.justhoot.near storage_deposit json-args '{"account_id":"gacha.YOUR-TOKEN.near"}' prepaid-gas '30 Tgas' attached-deposit '0.01 NEAR' ...`
 - Exclude pools/exchanges: `add_excluded '{"account_ids":["pool.ref-finance.near"]}'`.
 - Point your creator fees at `gacha.YOUR-TOKEN.near`.
 
