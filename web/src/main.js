@@ -17,7 +17,7 @@ let busy = false;
 
 function fillDome() {
   const dome = $("dome");
-  const colors = ["#00EC97", "#3DFFB8", "#00A86B", "#7BFFD0", "#E9FFF6"];
+  const colors = ["#FF6A00", "#FF8A2E", "#FFD3B0", "#141414", "#FFB27A"];
   dome.innerHTML = "";
   for (let i = 0; i < 18; i++) {
     const c = document.createElement("span");

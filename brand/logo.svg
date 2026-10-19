@@ -1,47 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="100%" r="95%">
-      <stop offset="0" stop-color="#0E5C43"/>
-      <stop offset="0.55" stop-color="#0A2A21"/>
-      <stop offset="1" stop-color="#06120F"/>
-    </radialGradient>
-    <linearGradient id="capTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3DFFB8"/>
-      <stop offset="1" stop-color="#00EC97"/>
-    </linearGradient>
-    <clipPath id="top"><rect x="0" y="0" width="512" height="256"/></clipPath>
-    <clipPath id="bottom"><rect x="0" y="256" width="512" height="256"/></clipPath>
-    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="10" result="b"/>
-      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <clipPath id="frame"><rect width="512" height="512" rx="112"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g clip-path="url(#frame)">
+    <rect width="512" height="512" fill="#FF6A00"/>
+    <g transform="rotate(-6 256 300) translate(-12 14)">
 
-  <!-- 10 winner dots around the capsule -->
-  <g fill="#00EC97">
-    <circle cx="256" cy="44" r="9"/><circle cx="380.6" cy="84.5" r="9"/>
-    <circle cx="457.6" cy="190.5" r="9"/><circle cx="457.6" cy="321.5" r="9"/>
-    <circle cx="380.6" cy="427.5" r="9"/><circle cx="256" cy="468" r="9"/>
-    <circle cx="131.4" cy="427.5" r="9"/><circle cx="54.4" cy="321.5" r="9"/>
-    <circle cx="54.4" cy="190.5" r="9"/><circle cx="131.4" cy="84.5" r="9"/>
-  </g>
+    <!-- owl head with ear tufts, running off the bottom edge -->
+    <path d="M58 560 L52 300 Q50 190 78 92 Q120 128 158 162 Q256 126 352 156 Q392 120 440 84 Q478 200 470 320 L476 560 Z"
+          fill="#FFFFFF" stroke="#141414" stroke-width="14" stroke-linejoin="round"/>
 
-  <!-- gacha capsule: green top half, dark bottom half -->
-  <g filter="url(#glow)">
-    <circle cx="256" cy="256" r="170" fill="url(#capTop)" clip-path="url(#top)"/>
-    <circle cx="256" cy="256" r="170" fill="#00A86B" clip-path="url(#bottom)"/>
-    <circle cx="256" cy="256" r="170" fill="none" stroke="#7BFFD0" stroke-width="10"/>
-    <rect x="86" y="250" width="340" height="12" fill="#06120F" opacity="0.85"/>
-  </g>
-
-  <!-- NEAR-style N -->
-  <defs>
-    <g id="n">
-      <path d="M192 344 V178 L320 334 V168" fill="none" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M192 344 L222 306" fill="none" stroke-width="22" stroke-linecap="round"/>
-      <path d="M320 168 L290 206" fill="none" stroke-width="22" stroke-linecap="round"/>
+    <!-- forehead feathers -->
+    <g fill="none" stroke="#141414" stroke-width="9" stroke-linecap="round">
+      <path d="M232 182 L244 202"/>
+      <path d="M262 176 L262 198"/>
+      <path d="M292 182 L280 202"/>
     </g>
-  </defs>
-  <use href="#n" stroke="#06120F"/>
+
+    <!-- left eye: big, looking sideways -->
+    <circle cx="190" cy="292" r="74" fill="#FFFFFF" stroke="#141414" stroke-width="13"/>
+    <circle cx="166" cy="296" r="28" fill="#141414"/>
+    <circle cx="157" cy="286" r="8" fill="#FFFFFF"/>
+
+    <!-- right eye: smaller pupil, the googly one -->
+    <circle cx="368" cy="276" r="58" fill="#FFFFFF" stroke="#141414" stroke-width="13"/>
+    <circle cx="378" cy="282" r="14" fill="#141414"/>
+
+    <!-- beak -->
+    <path d="M262 340 L298 340 L280 376 Z" fill="#FF6A00" stroke="#141414" stroke-width="10" stroke-linejoin="round"/>
+    </g>
+  </g>
 </svg>
