@@ -1,29 +1,44 @@
 use super::*;
 use near_sdk::test_utils::{accounts, get_logs, VMContextBuilder};
 use near_sdk::{testing_env, RuntimeFeesConfig};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const ONE_NEAR: u128 = 1_000_000_000_000_000_000_000_000;
-const MIN_HOLD: u128 = 1_000;
+const ONE_EARN: u128 = 1_000_000_000_000_000_000; // 18 decimals
+const MIN_HOLD: u128 = 1_000 * ONE_EARN;
 
 fn acc(name: &str) -> AccountId {
     name.parse().unwrap()
 }
+fn owner() -> AccountId {
+    accounts(0)
+}
+fn gacha() -> AccountId {
+    acc("gacha.near")
+}
+fn token() -> AccountId {
+    acc("earn.token.near")
+}
+fn holder(i: usize) -> AccountId {
+    acc(&format!("holder{i}.near"))
+}
+fn holders(n: usize) -> Vec<AccountId> {
+    (0..n).map(holder).collect()
+}
 
-fn ctx(predecessor: &AccountId, balance: u128, deposit: u128, ts_sec: u64) -> VMContextBuilder {
+fn ctx(predecessor: &AccountId) -> VMContextBuilder {
     let mut b = VMContextBuilder::new();
-    b.current_account_id(acc("gacha.near"))
+    b.current_account_id(gacha())
         .predecessor_account_id(predecessor.clone())
-        .account_balance(NearToken::from_yoctonear(balance))
-        .attached_deposit(NearToken::from_yoctonear(deposit))
-        .block_timestamp(ts_sec * 1_000_000_000)
+        .account_balance(NearToken::from_yoctonear(10 * ONE_NEAR))
+        .block_timestamp(1_000_000_000)
         .random_seed([7u8; 32]);
     b
 }
 
-fn with_results(b: VMContextBuilder, results: Vec<PromiseResult>) {
+fn with_results(results: Vec<PromiseResult>) {
     testing_env!(
-        b.build(),
+        ctx(&gacha()).build(),
         near_sdk::test_vm_config(),
         RuntimeFeesConfig::test(),
         Default::default(),
@@ -31,206 +46,199 @@ fn with_results(b: VMContextBuilder, results: Vec<PromiseResult>) {
     );
 }
 
-fn balance_ok(v: u128) -> PromiseResult {
+fn bal(v: u128) -> PromiseResult {
     PromiseResult::Successful(near_sdk::serde_json::to_vec(&U128(v)).unwrap())
+}
+fn ok() -> PromiseResult {
+    PromiseResult::Successful(vec![])
 }
 
 fn setup() -> EarnGacha {
-    testing_env!(ctx(&accounts(0), 10 * ONE_NEAR, 0, 0).build());
-    EarnGacha::new(accounts(0), acc("token.near"), U128(MIN_HOLD), U64(3600), None)
+    testing_env!(ctx(&owner()).build());
+    EarnGacha::new(owner(), token(), U128(MIN_HOLD), None)
 }
 
-/// Runs enter + its callback for `who`, with the given token balance.
-fn enter_with_balance(c: &mut EarnGacha, who: &AccountId, token_balance: u128) -> bool {
-    testing_env!(ctx(who, 10 * ONE_NEAR, ENTRY_DEPOSIT.as_yoctonear(), 0).build());
-    let _ = c.enter();
-    let gacha = acc("gacha.near");
-    with_results(ctx(&gacha, 10 * ONE_NEAR, 0, 0), vec![balance_ok(token_balance)]);
-    c.on_enter_checked(who.clone(), U128(ENTRY_DEPOSIT.as_yoctonear()))
-}
-
-fn holder(i: usize) -> AccountId {
-    acc(&format!("holder{i}.near"))
+/// Owner starts a draw with `list`; returns the picked candidates.
+fn start_draw(c: &mut EarnGacha, list: Vec<AccountId>) -> Vec<AccountId> {
+    testing_env!(ctx(&owner()).build());
+    let _ = c.draw(list, Some(U64(42)));
+    c.get_pending_draw().expect("pending").candidates
 }
 
 #[test]
-fn pick_unique_returns_distinct_indices_in_range() {
+fn pick_accounts_returns_distinct_accounts() {
     testing_env!(VMContextBuilder::new().build());
-    for n in 1..40u32 {
-        let k = n.min(10);
-        let picks = pick_unique(n, k, &[3u8; 32], n);
-        assert_eq!(picks.len(), k as usize);
-        let set: HashSet<_> = picks.iter().collect();
-        assert_eq!(set.len(), k as usize, "duplicates for n={n}");
-        assert!(picks.iter().all(|&p| p < n));
+    for n in 1..40usize {
+        let list = holders(n);
+        let picks = pick_accounts(&list, 10, &[3u8; 32], n as u32, |_| false);
+        assert_eq!(picks.len(), n.min(10));
+        assert_eq!(picks.iter().collect::<HashSet<_>>().len(), picks.len(), "duplicates for n={n}");
     }
 }
 
 #[test]
-fn pick_unique_is_roughly_uniform() {
+fn pick_accounts_skips_duplicates_and_excluded() {
     testing_env!(VMContextBuilder::new().build());
-    let n = 20u32;
-    let mut counts = vec![0u32; n as usize];
+    let mut list = holders(5);
+    list.extend(holders(5)); // every holder listed twice
+    list.push(acc("pool.near"));
+    let picks = pick_accounts(&list, 10, &[1u8; 32], 0, |a| a.as_str() == "pool.near");
+    assert_eq!(picks.len(), 5);
+    assert!(!picks.contains(&acc("pool.near")));
+}
+
+#[test]
+fn pick_accounts_is_roughly_uniform() {
+    testing_env!(VMContextBuilder::new().build());
+    let list = holders(20);
+    let mut counts: HashMap<AccountId, u32> = HashMap::new();
     for round in 0..2000u32 {
-        for p in pick_unique(n, 10, &[9u8; 32], round) {
-            counts[p as usize] += 1;
+        for p in pick_accounts(&list, 10, &[9u8; 32], round, |_| false) {
+            *counts.entry(p).or_default() += 1;
         }
     }
     // Expected 1000 picks each (2000 rounds * 10 / 20).
-    assert!(counts.iter().all(|&c| (850..1150).contains(&c)), "{counts:?}");
+    assert!(counts.values().all(|&c| (850..1150).contains(&c)), "{counts:?}");
 }
 
 #[test]
-fn holder_can_enter_and_leave() {
+fn accepts_earn_and_returns_other_tokens() {
     let mut c = setup();
-    assert!(enter_with_balance(&mut c, &holder(1), MIN_HOLD));
-    assert!(c.is_entered(holder(1)));
-    assert_eq!(c.get_stats().entrants, 1);
-    assert_eq!(c.held_deposits, ENTRY_DEPOSIT.as_yoctonear());
-
-    testing_env!(ctx(&holder(1), 10 * ONE_NEAR, 0, 0).build());
-    let _ = c.leave();
-    assert!(!c.is_entered(holder(1)));
-    assert_eq!(c.held_deposits, 0);
-}
-
-#[test]
-fn non_holder_is_refused() {
-    let mut c = setup();
-    assert!(!enter_with_balance(&mut c, &holder(1), MIN_HOLD - 1));
-    assert!(!c.is_entered(holder(1)));
-    assert_eq!(c.held_deposits, 0);
-}
-
-#[test]
-fn failed_balance_check_refuses_entry() {
-    let mut c = setup();
-    testing_env!(ctx(&holder(1), 10 * ONE_NEAR, ENTRY_DEPOSIT.as_yoctonear(), 0).build());
-    let _ = c.enter();
-    with_results(ctx(&acc("gacha.near"), 10 * ONE_NEAR, 0, 0), vec![PromiseResult::Failed]);
-    assert!(!c.on_enter_checked(holder(1), U128(ENTRY_DEPOSIT.as_yoctonear())));
-    assert_eq!(c.held_deposits, 0);
-}
-
-#[test]
-#[should_panic(expected = "Attach 0.01 NEAR to enter")]
-fn enter_requires_deposit() {
-    let mut c = setup();
-    testing_env!(ctx(&holder(1), 10 * ONE_NEAR, 0, 0).build());
-    let _ = c.enter();
-}
-
-#[test]
-fn prize_pool_excludes_reserve_and_deposits() {
-    let mut c = setup();
-    enter_with_balance(&mut c, &holder(1), MIN_HOLD);
-    testing_env!(ctx(&accounts(0), 10 * ONE_NEAR, 0, 0).build());
-    let storage = env::storage_byte_cost().as_yoctonear() * env::storage_usage() as u128;
-    let expected = 10 * ONE_NEAR - storage - RESERVE.as_yoctonear() - ENTRY_DEPOSIT.as_yoctonear();
-    assert_eq!(c.get_prize_pool().0, expected);
-}
-
-#[test]
-#[should_panic(expected = "Too early")]
-fn non_owner_cannot_draw_early() {
-    let mut c = setup();
-    enter_with_balance(&mut c, &holder(1), MIN_HOLD);
-    testing_env!(ctx(&holder(1), 10 * ONE_NEAR, 0, 10).build());
-    let _ = c.draw();
-}
-
-#[test]
-fn draw_pays_ten_holders_equally_and_drops_sellers() {
-    let mut c = setup();
-    for i in 0..25 {
-        enter_with_balance(&mut c, &holder(i), MIN_HOLD * 2);
+    testing_env!(ctx(&token()).build());
+    match c.ft_on_transfer(holder(1), U128(5 * ONE_EARN), String::new()) {
+        PromiseOrValue::Value(v) => assert_eq!(v.0, 0),
+        _ => panic!("expected value"),
     }
+    testing_env!(ctx(&acc("other.token.near")).build());
+    match c.ft_on_transfer(holder(1), U128(5), String::new()) {
+        PromiseOrValue::Value(v) => assert_eq!(v.0, 5),
+        _ => panic!("expected value"),
+    }
+}
 
-    // Anyone can draw after the interval.
-    testing_env!(ctx(&holder(3), 10 * ONE_NEAR, 0, 3600).build());
-    let pool = c.get_prize_pool().0;
-    let _ = c.draw();
-    let pending = c.get_pending_draw().expect("pending");
-    assert_eq!(pending.candidates.len(), 10);
-    assert_eq!(pending.prize.0, pool);
+#[test]
+#[should_panic(expected = "Only the owner can do this")]
+fn only_owner_can_draw() {
+    let mut c = setup();
+    testing_env!(ctx(&holder(1)).build());
+    let _ = c.draw(holders(3), None);
+}
+
+/// Owner draws from 25 holders. Of the 10 picks: 8 hold enough, 1 is below
+/// the minimum, 1 balance check failed. Then 1 of the 8 transfers fails.
+#[test]
+fn owner_draw_pays_earn_and_handles_failures() {
+    let mut c = setup();
+    let candidates = start_draw(&mut c, holders(25));
+    assert_eq!(candidates.len(), 10);
     assert!(c.get_stats().draw_in_progress);
-    // While the draw runs, its prize is not counted in the pool.
-    assert_eq!(c.get_prize_pool().0, 0);
 
-    // 8 still hold, 1 sold, 1 balance check failed.
-    let mut results: Vec<PromiseResult> = (0..8).map(|_| balance_ok(MIN_HOLD)).collect();
-    results.push(balance_ok(0));
+    let pool = 8_000 * ONE_EARN + 7; // odd amount to check rounding
+    let mut results = vec![bal(pool)];
+    results.extend((0..8).map(|_| bal(MIN_HOLD)));
+    results.push(bal(MIN_HOLD - 1));
     results.push(PromiseResult::Failed);
-    with_results(ctx(&acc("gacha.near"), 10 * ONE_NEAR, 0, 3600), results);
-    let round = c.on_draw_checked();
+    with_results(results);
+    assert!(matches!(c.on_draw_checked(), PromiseOrValue::Promise(_)));
+    assert!(c.get_stats().draw_in_progress, "still waiting on transfers");
 
-    assert_eq!(round.winners.len(), 8);
     let share = pool / 8;
+    let qualified = candidates[..8].to_vec();
+    let disqualified = candidates[8..].to_vec();
+    let mut transfers: Vec<PromiseResult> = (0..7).map(|_| ok()).collect();
+    transfers.push(PromiseResult::Failed);
+    with_results(transfers);
+    let round = c.on_payouts_done(U128(pool), U128(share), qualified.clone(), disqualified);
+
+    assert_eq!(round.winners.len(), 7);
     assert!(round.winners.iter().all(|w| w.amount.0 == share));
-    assert_eq!(round.rolled_over.0, pool - share * 8);
+    assert_eq!(round.failed_payouts, vec![qualified[7].clone()]);
     assert_eq!(round.disqualified.len(), 2);
-    // The seller is removed, the failed check is kept.
-    assert!(!c.is_entered(pending.candidates[8].clone()));
-    assert!(c.is_entered(pending.candidates[9].clone()));
-    assert_eq!(c.get_stats().entrants, 24);
-    assert_eq!(c.total_paid, share * 8);
-    assert!(c.get_pending_draw().is_none());
+    assert_eq!(round.rolled_over.0, pool - share * 7);
+    assert_eq!(round.snapshot_size, 25);
+    assert_eq!(round.batch, Some(U64(42)));
+    assert_eq!(round.snapshot_hash.len(), 64);
+    assert_eq!(c.total_paid, share * 7);
+    assert!(!c.get_stats().draw_in_progress);
     assert_eq!(c.get_rounds(None, None).len(), 1);
     assert!(get_logs().iter().any(|l| l.contains("\"event\":\"draw\"")));
 }
 
 #[test]
-fn draw_with_fewer_entrants_than_winners_pays_all() {
+fn draw_with_empty_pool_rolls_over_without_transfers() {
     let mut c = setup();
-    for i in 0..3 {
-        enter_with_balance(&mut c, &holder(i), MIN_HOLD);
+    assert_eq!(start_draw(&mut c, holders(3)).len(), 3);
+    let mut results = vec![bal(0)];
+    results.extend((0..3).map(|_| bal(MIN_HOLD)));
+    with_results(results);
+    match c.on_draw_checked() {
+        PromiseOrValue::Value(r) => assert!(r.winners.is_empty()),
+        _ => panic!("no transfers expected"),
     }
-    testing_env!(ctx(&accounts(0), 10 * ONE_NEAR, 0, 5).build());
-    let pool = c.get_prize_pool().0;
-    let _ = c.draw(); // owner may draw early
-    assert_eq!(c.get_pending_draw().unwrap().candidates.len(), 3);
+    assert!(!c.get_stats().draw_in_progress);
+}
 
-    with_results(
-        ctx(&acc("gacha.near"), 10 * ONE_NEAR, 0, 5),
-        (0..3).map(|_| balance_ok(MIN_HOLD)).collect(),
-    );
-    let round = c.on_draw_checked();
-    assert_eq!(round.winners.len(), 3);
-    assert_eq!(round.winners[0].amount.0, pool / 3);
+#[test]
+fn failed_pool_read_cancels_draw() {
+    let mut c = setup();
+    start_draw(&mut c, holders(1));
+    with_results(vec![PromiseResult::Failed, bal(MIN_HOLD)]);
+    assert!(matches!(c.on_draw_checked(), PromiseOrValue::Value(_)));
+    assert!(c.get_pending_draw().is_none());
+    assert_eq!(c.get_rounds(None, None).len(), 0);
 }
 
 #[test]
 fn owner_can_cancel_stuck_draw() {
     let mut c = setup();
-    enter_with_balance(&mut c, &holder(1), MIN_HOLD);
-    testing_env!(ctx(&accounts(0), 10 * ONE_NEAR, 0, 5).build());
-    let pool = c.get_prize_pool().0;
-    let _ = c.draw();
-    assert_eq!(c.get_prize_pool().0, 0);
+    start_draw(&mut c, holders(1));
     c.cancel_pending_draw();
-    assert_eq!(c.get_prize_pool().0, pool);
+    assert!(c.get_pending_draw().is_none());
 }
 
 #[test]
-#[should_panic(expected = "Prize pool is empty")]
-fn cannot_draw_empty_pool() {
+fn excluded_accounts_never_picked() {
     let mut c = setup();
-    enter_with_balance(&mut c, &holder(1), MIN_HOLD);
-    testing_env!(ctx(&accounts(0), RESERVE.as_yoctonear(), 0, 5).build());
-    let _ = c.draw();
+    testing_env!(ctx(&owner()).build());
+    c.add_excluded(vec![holder(0), holder(1)]);
+    assert_eq!(c.get_excluded().len(), 2);
+    let mut list = holders(4);
+    list.push(gacha());
+    list.push(token());
+    let picks = start_draw(&mut c, list);
+    assert_eq!(picks.len(), 2);
+    assert!(picks.iter().all(|a| a == &holder(2) || a == &holder(3)));
 }
 
 #[test]
-fn remove_entrant_keeps_index_consistent() {
+#[should_panic(expected = "No eligible holders")]
+fn draw_needs_an_eligible_holder() {
     let mut c = setup();
-    for i in 0..5 {
-        enter_with_balance(&mut c, &holder(i), MIN_HOLD);
-    }
-    assert!(c.remove_entrant(&holder(1)));
-    assert!(!c.remove_entrant(&holder(1)));
-    let list = c.get_entrants(None, None);
-    assert_eq!(list.len(), 4);
-    for (i, a) in list.iter().enumerate() {
-        assert_eq!(c.entrant_index.get(a), Some(&(i as u32)));
-    }
+    testing_env!(ctx(&owner()).build());
+    let _ = c.draw(vec![gacha(), token()], None);
+}
+
+#[test]
+#[should_panic(expected = "Holder list too long")]
+fn draw_rejects_oversized_snapshot() {
+    let mut c = setup();
+    testing_env!(ctx(&owner()).build());
+    let _ = c.draw(holders(MAX_SNAPSHOT + 1), None);
+}
+
+#[test]
+fn spare_near_excludes_reserve() {
+    let mut c = setup();
+    testing_env!(ctx(&owner()).build());
+    let storage = env::storage_byte_cost().as_yoctonear() * env::storage_usage() as u128;
+    assert_eq!(c.get_spare_near().0, 10 * ONE_NEAR - storage - RESERVE.as_yoctonear());
+    let _ = c.withdraw_near(None);
+}
+
+#[test]
+#[should_panic(expected = "Not enough spare NEAR")]
+fn cannot_withdraw_reserve() {
+    let mut c = setup();
+    testing_env!(ctx(&owner()).build());
+    let _ = c.withdraw_near(Some(U128(10 * ONE_NEAR)));
 }

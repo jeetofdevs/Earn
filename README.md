@@ -2,119 +2,138 @@
 
 # EARN — Holder Gacha on NEAR
 
-**100% of creator fees → 10 random holders, every draw.**
+**100% of creator fees, paid in $EARN, to 10 random holders every 30 minutes.**
 
-The launchpad pays the creator 100% of the fees. Here, the creator wallet is a
-smart contract, and the website turns it into a gacha machine: each draw picks
-10 random token holders and splits the whole prize pool between them.
+1. **Hold $EARN.**
+2. **Submit your wallet address** on the website. No wallet connect, nothing to sign. Do it once per batch.
+3. **Every 30 minutes** the batch closes and the gacha is pulled: 10 random wallets from that batch split the whole $EARN prize pool.
 
-> 🇮🇩 **Ringkasnya:** 100% fee kreator masuk ke kontrak ini. Setiap draw, mesin
-> gacha memilih 10 holder secara acak dan membagi seluruh pool sama rata.
-> Holder cukup daftar sekali (deposit 0.01 NEAR, dikembalikan saat keluar).
-> Yang sudah jual token akan dicoret saat terpilih, dan bagiannya dibagi ke
-> pemenang lain.
+> 🇮🇩 **Ringkasnya:** Holder cukup pegang $EARN dan submit alamat wallet di
+> website setiap batch (30 menit). Tidak perlu connect wallet. Saat batch
+> tutup, kontrak memilih 10 wallet acak dari batch itu, mengecek saldo $EARN
+> mereka on-chain, lalu membagi rata 100% fee (dalam $EARN) ke pemenang.
+> Hanya owner yang bisa menarik gacha — manual lewat `npm run draw`, atau
+> otomatis tiap 30 menit dengan `AUTO_DRAW=true`.
 
 ## What's in here
 
-| Folder      | What it is |
-|-------------|------------|
-| `contract/` | Rust NEAR smart contract (near-sdk 5) with unit tests |
-| `web/`      | The gacha website (Vite + NEAR Wallet Selector) |
-| `brand/`    | Logo (SVG/PNG) and Twitter/X cover (1500×500) |
+| Folder        | What it is |
+|---------------|------------|
+| `contract/`   | Rust NEAR smart contract (near-sdk 5) with unit tests |
+| `web/`        | Website + Node server: join form, 30-minute batches, auto-draw, draw CLI |
+| `brand/`      | Logo (SVG/PNG) and Twitter/X cover (1500×500) |
 
-## How the contract works
+## How it works
 
-1. **Fees in.** Set the contract account as the token's creator/fee wallet, so
-   fees land on it directly. Plain NEAR transfers count. `deposit_fees` also
-   works if the creator forwards fees by hand.
-2. **Enter.** A holder calls `enter` with 0.01 NEAR. The contract asks the token
-   contract `ft_balance_of(holder)` and adds them if they hold at least
-   `min_hold`. The deposit covers storage and is refunded by `leave`.
-3. **Draw.** After `draw_interval_sec`, **anyone** can call `draw` (the owner can
-   any time). It picks 10 distinct entrants at random (partial Fisher–Yates on
-   NEAR's block random seed) and re-checks each one's token balance.
-4. **Pay.** Every pick who still holds gets `pool / qualified` NEAR. Picks who
-   sold are removed (deposit refunded) and their share goes to the others.
-   If nobody qualifies, the pool rolls over.
+**Fees.** 100% of creator fees go to the contract as $EARN (plain `ft_transfer`
+or `ft_transfer_call`). The prize pool is simply the contract's $EARN balance.
+If your launchpad pays fees in NEAR, use `withdraw_near`, buy $EARN, and send
+it to the contract.
 
-The prize pool is the account balance minus storage, entry deposits, a 0.5 NEAR
-safety reserve, and any prize locked in a running draw — so entry deposits are
-never paid out as prizes.
+**Joining.** The website's server keeps one list per 30-minute batch. When
+someone submits an address it checks `ft_balance_of` on the token and only
+accepts holders with at least `min_hold`. Entries are public at
+`/api/batches/<id>`.
 
-### Methods
+**Drawing.** Only the owner can call `draw(holders, batch)`. The contract:
+
+1. reads its own $EARN balance (the pool),
+2. picks 10 distinct accounts from the list with NEAR's block random seed
+   (skipping duplicates, excluded accounts, and itself),
+3. re-checks each pick's $EARN balance on the token contract,
+4. sends `pool / qualified` $EARN to each pick still holding `min_hold`.
+
+Picks below the minimum get nothing and their share goes to the others. Failed
+transfers stay in the pool. Each round stores the batch number and a sha256
+hash of the list it drew from, so anyone can check it against `/api/batches/<id>`.
+
+### Contract methods
 
 | Method | Who | Notes |
 |---|---|---|
-| `new(owner_id, token_id, min_hold, draw_interval_sec, winners_per_draw?)` | deploy | `winners_per_draw` defaults to 10 |
-| `enter()` | holders | attach 0.01 NEAR, 50 Tgas |
-| `leave()` | entrants | refunds 0.01 NEAR |
-| `draw()` | anyone after timer, owner any time | attach 300 Tgas |
-| `deposit_fees()` | anyone | attach NEAR |
-| `cancel_pending_draw()` | owner | unlocks a draw whose callback never ran |
-| `set_min_hold`, `set_draw_interval`, `set_winners_per_draw`, `transfer_ownership` | owner | |
-| `get_config`, `get_stats`, `get_prize_pool`, `is_entered`, `get_entrants`, `get_rounds`, `get_pending_draw` | view | |
+| `new(owner_id, token_id, min_hold, winners_per_draw?)` | deploy | `winners_per_draw` defaults to 10 |
+| `draw(holders, batch?)` | owner | attach 300 Tgas; max 5,000 accounts |
+| `ft_on_transfer` | token | accepts $EARN into the pool, returns other tokens |
+| `withdraw_near(amount?)` | owner | spare NEAR only (keeps 0.5 NEAR reserve + storage) |
+| `add_excluded`, `remove_excluded` | owner | e.g. liquidity pools, exchanges, team wallets |
+| `cancel_pending_draw` | owner | unlocks a draw whose callbacks never ran |
+| `set_min_hold`, `set_winners_per_draw`, `transfer_ownership` | owner | |
+| `get_config`, `get_stats`, `get_rounds`, `get_pending_draw`, `get_excluded`, `get_spare_near` | view | |
 
-Events are logged as `EVENT_JSON` with standard `earn-gacha` (`enter`, `leave`,
-`deposit`, `draw`).
-
-## Build & test
+## 1. Deploy the contract (testnet example, near-cli-rs)
 
 ```bash
 cd contract
-cargo test                      # 13 unit tests
-cargo near build non-reproducible-wasm   # needs: cargo install cargo-near
-```
+cargo test                                # 14 unit tests
+cargo near build non-reproducible-wasm    # needs: cargo install cargo-near
 
-Use `cargo near build` for deploys: it produces a wasm that the NEAR runtime
-accepts with current Rust versions.
-
-## Deploy (testnet example, near-cli-rs)
-
-```bash
 near account create-account sponsor-by-faucet-service earn-gacha.testnet autogenerate-new-keypair save-to-keychain network-config testnet create
 
-near contract deploy earn-gacha.testnet use-file contract/target/near/earn_gacha.wasm \
+near contract deploy earn-gacha.testnet use-file target/near/earn_gacha.wasm \
   with-init-call new json-args '{
-    "owner_id": "YOUR_ACCOUNT.testnet",
-    "token_id": "YOUR_TOKEN.testnet",
-    "min_hold": "1000000000000000000000",
-    "draw_interval_sec": "86400"
+    "owner_id": "YOU.testnet",
+    "token_id": "EARN_TOKEN.testnet",
+    "min_hold": "1000000000000000000000"
   }' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
 ```
 
 - `min_hold` is in the token's smallest unit (example = 1,000 tokens with 18 decimals).
-- `draw_interval_sec`: `86400` = daily draw.
-- Fund the account with a bit more than 0.5 NEAR for the reserve.
-- Then set `earn-gacha.testnet` as the creator fee wallet on your launchpad.
+- Keep at least 1 NEAR on the contract account for storage and gas.
+- **Register the contract on the $EARN token** so it can receive $EARN:
+  `near contract call-function as-transaction EARN_TOKEN.testnet storage_deposit json-args '{"account_id":"earn-gacha.testnet"}' prepaid-gas '30 Tgas' attached-deposit '0.01 NEAR' ...`
+- Exclude pools/exchanges: `add_excluded '{"account_ids":["pool.ref-finance.near"]}'`.
+- Point your creator fees at `earn-gacha.testnet`.
 
-## Website
+## 2. Deploy the website on Railway
+
+The repo has a `Dockerfile` and `railway.json` at the root (and a root
+`package.json` in case Railway uses Railpack instead).
+
+1. Railway → **New Project → Deploy from GitHub repo** → this repo. Leave **Root Directory** empty.
+2. **Variables:**
+   - `VITE_NETWORK` = `testnet` or `mainnet`
+   - `VITE_CONTRACT_ID` = your contract account
+   - `DATA_DIR` = `/data`
+   - for auto-draw: `AUTO_DRAW` = `true`, `OWNER_ACCOUNT_ID`, `OWNER_PRIVATE_KEY`
+3. **Add a Volume** mounted at `/data`, so batch entries survive redeploys.
+4. **Settings → Networking → Generate Domain.**
+
+## 3. Pull the gacha
+
+**Automatic:** with `AUTO_DRAW=true` the server draws each batch about 15–35
+seconds after it closes. Empty batches are skipped.
+
+**Manual** (from your computer):
 
 ```bash
 cd web
-cp .env.example .env    # set VITE_NETWORK and VITE_CONTRACT_ID
+cp .env.example .env     # set VITE_*, OWNER_*, SITE_URL=<your Railway URL>
 npm install
-npm run dev             # local
-npm run build           # static files in web/dist → Vercel / Netlify / GitHub Pages
+npm run draw -- --dry-run   # show the batch that just closed
+npm run draw                # draw it and pay winners
+npm run draw -- --batch 995792
 ```
 
-### Deploy the website on Railway
+A batch can't be drawn twice: both the CLI and the server check the contract first.
 
-The repo root has a `Dockerfile` and `railway.json`, so Railway builds and
-serves the site from `web/` automatically.
+## Local development
 
-1. Railway → **New Project → Deploy from GitHub repo** → pick this repo and branch.
-2. Leave **Root Directory** empty (the repo root).
-3. Under **Variables**, add `VITE_NETWORK` (`testnet` or `mainnet`) and
-   `VITE_CONTRACT_ID` (your deployed contract account). They are baked in at
-   build time, so redeploy after changing them.
-4. **Settings → Networking → Generate Domain**.
+```bash
+cd web
+npm install
+npm run build && npm start   # site + API on http://localhost:3000
+npm run dev                  # Vite dev server, /api proxied to :3000
+```
 
 ## Things to know
 
-- **Randomness** comes from NEAR's block random seed. It's fine for a
-  community raffle, but a block producer could in theory influence it. For
-  large pools, consider a commit-reveal or VRF upgrade.
-- **Fees in NEAR only.** If your launchpad pays creator fees in tokens, swap
-  them to NEAR before depositing (or extend the contract with `ft_on_transfer`).
-- Holders must hold at draw time, not just at entry — sellers are dropped.
+- **Your private key** (`OWNER_PRIVATE_KEY`) controls the draws. Keep it only in
+  Railway Variables or your local `.env`, never in git. Consider a dedicated
+  owner account holding little NEAR.
+- **Trust:** the owner sends the batch list to the contract. The list's hash is
+  stored on-chain and the list is public, so people can check their address
+  was included. The contract picks the winners, not the owner.
+- **Randomness** comes from NEAR's block random seed. It's fine for a community
+  raffle, but a block producer could in theory influence it.
+- Without a Railway volume, batch entries are lost on each redeploy.
 - Not audited. Get a review before putting serious money in it.

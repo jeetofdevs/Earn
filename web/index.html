@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EARN — Holder Gacha on NEAR</title>
-    <meta name="description" content="100% of creator fees go to 10 random holders every draw. Built on NEAR." />
+    <meta name="description" content="100% of creator fees, paid in $EARN, to 10 random holders every draw. Just hold. Built on NEAR." />
     <link rel="icon" href="/logo.svg" />
     <meta property="og:image" content="/logo-512.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -13,7 +13,7 @@
   <body>
     <header class="top">
       <a class="brand" href="/"><img src="/logo.svg" alt="" /><span>EARN<i>.</i></span></a>
-      <button id="wallet-btn" class="btn ghost">Connect wallet</button>
+      <a class="btn primary small" href="#join">Join batch</a>
     </header>
 
     <main>
@@ -21,13 +21,13 @@
         <div class="hero-text">
           <p class="eyebrow">Holder gacha · Built on NEAR</p>
           <h1><em>100%</em> of creator fees<br />→ <em>10</em> random holders.</h1>
-          <p class="lead">Every creator fee lands in the prize pool. Each draw, the machine picks 10 holders and splits the whole pool between them. Hold, enter once, and you're in every draw.</p>
+          <p class="lead">Every creator fee goes into the prize pool in <b>$EARN</b>. On each draw, the machine picks 10 holders and splits the whole pool between them. <b>Hold $EARN, drop your wallet address</b> — no wallet connect, nothing to sign. A new batch every 30 minutes.</p>
 
           <div class="stats">
-            <div><span>Prize pool</span><b id="pool">—</b><small>NEAR</small></div>
-            <div><span>Next draw</span><b id="countdown">—</b><small id="next-at"></small></div>
-            <div><span>Holders entered</span><b id="entrants">—</b></div>
-            <div><span>Paid to holders</span><b id="paid">—</b><small>NEAR</small></div>
+            <div><span>Prize pool</span><b id="pool">—</b><small>$EARN</small></div>
+            <div><span>This batch ends in</span><b id="countdown">—</b><small id="batch-time"></small></div>
+            <div><span>Joined this batch</span><b id="batch-entries">—</b><small id="draw-count"></small></div>
+            <div><span>Paid to holders</span><b id="paid">—</b><small>$EARN</small></div>
           </div>
         </div>
 
@@ -36,12 +36,8 @@
             <div class="dome" id="dome"></div>
             <div class="body">
               <div class="slot"></div>
-              <button class="knob" id="knob" title="Pull the gacha" aria-label="Pull the gacha"><span></span></button>
+              <div class="knob" aria-hidden="true"><span></span></div>
             </div>
-          </div>
-          <div class="actions">
-            <button id="enter-btn" class="btn primary" disabled>Connect to enter</button>
-            <button id="pull-btn" class="btn" disabled>Pull the gacha</button>
           </div>
           <p class="note" id="status">Loading…</p>
         </div>
@@ -50,36 +46,28 @@
       <section class="card">
         <h2>How it works</h2>
         <ol class="steps">
-          <li><b>Fees in.</b> The token's creator wallet is this contract. Every trade fee goes straight into the prize pool.</li>
-          <li><b>Holders enter.</b> Hold at least <span id="min-hold">the minimum</span> <span class="sym">tokens</span> and enter once (0.01 NEAR deposit, refunded when you leave).</li>
-          <li><b>Pull.</b> When the timer hits zero anyone can pull the gacha. 10 entrants are picked at random.</li>
-          <li><b>Paid.</b> Each pick still holding gets an equal share of 100% of the pool. Anyone who sold is dropped and their share goes to the others.</li>
+          <li><b>Fees in.</b> 100% of creator fees are sent to the gacha contract as $EARN and go straight into the prize pool.</li>
+          <li><b>Hold &amp; join.</b> Hold at least <span id="min-hold">the minimum</span> <span class="sym">$EARN</span> and submit your wallet address. Once per batch.</li>
+          <li><b>Every 30 minutes.</b> When the batch closes, the gacha is pulled. The contract picks 10 of that batch's wallets with NEAR's on-chain randomness.</li>
+          <li><b>Paid in $EARN.</b> Each pick still holding the minimum gets an equal share of 100% of the pool, sent straight to their wallet.</li>
         </ol>
       </section>
 
-      <section class="card" id="me-card" hidden>
-        <h2>Your spot</h2>
-        <div class="me">
-          <div><span>Account</span><b id="me-account"></b></div>
-          <div><span>Your balance</span><b id="me-balance">—</b></div>
-          <div><span>Status</span><b id="me-status">—</b></div>
-        </div>
-        <button id="leave-btn" class="btn ghost small" hidden>Leave raffle &amp; refund deposit</button>
+      <section class="card" id="join">
+        <div class="row"><h2>Join this batch</h2><span class="pill" id="join-timer">—</span></div>
+        <p class="muted">Paste your NEAR wallet address. We check your $EARN balance — nothing to sign, no wallet connect. You need to join again each batch.</p>
+        <form id="join-form" class="fund">
+          <input id="join-account" type="text" placeholder="yourname.near" autocomplete="off" autocapitalize="off" spellcheck="false" required />
+          <button class="btn primary" type="submit" id="join-btn">Join batch</button>
+        </form>
+        <p id="join-result" class="check-result" hidden></p>
       </section>
 
-      <section class="card">
+      <section class="card" id="draws">
         <div class="row"><h2>Past draws</h2><span class="muted" id="contract-link"></span></div>
         <div id="rounds" class="rounds"><p class="muted">No draws yet.</p></div>
       </section>
 
-      <section class="card">
-        <h2>Top up the pool</h2>
-        <p class="muted">Creator forwarding fees by hand, or just feeling generous? Everything sent here is paid out to holders.</p>
-        <form id="fund-form" class="fund">
-          <input id="fund-amount" type="number" min="0.01" step="0.01" placeholder="Amount in NEAR" required />
-          <button class="btn" type="submit">Add to pool</button>
-        </form>
-      </section>
     </main>
 
     <div class="reveal" id="reveal" hidden>
@@ -90,7 +78,7 @@
       </div>
     </div>
 
-    <footer>Built on NEAR · Randomness from NEAR's block seed · Contract is open source</footer>
+    <footer>Built on NEAR · Rewards in $EARN · Winners picked by NEAR's on-chain randomness · Contract is open source</footer>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

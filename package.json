@@ -1,0 +1,14 @@
+{
+  "name": "earn",
+  "private": true,
+  "version": "0.1.0",
+  "description": "EARN holder gacha on NEAR. The website lives in web/, the contract in contract/.",
+  "scripts": {
+    "postinstall": "npm ci --prefix web --include=dev",
+    "build": "npm run build --prefix web",
+    "start": "npm start --prefix web"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

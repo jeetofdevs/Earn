@@ -1,59 +1,62 @@
-//! Earn Gacha — a NEAR contract that sends 100% of a token's creator fees
-//! to 10 random holders.
+//! Earn Gacha — a NEAR contract that sends 100% of the creator fees, in
+//! $EARN, to 10 random $EARN holders. Holders don't need to do anything:
+//! holding at least `min_hold` $EARN is enough.
 //!
 //! How it works:
-//! 1. The launchpad pays creator fees (in NEAR) to this contract's account,
-//!    either directly (set this account as the creator wallet) or by the
-//!    creator forwarding them with `deposit_fees`.
-//! 2. Holders of the project token call `enter`. The contract checks their
-//!    balance on the token contract (`ft_balance_of`) and adds them to the
-//!    raffle if they hold at least `min_hold`.
-//! 3. Once per `draw_interval`, anyone can call `draw`. The contract picks 10
-//!    random entrants, re-checks that each one still holds the token, and
-//!    splits the whole prize pool equally between the ones that do.
-//!    Entrants who sold are removed and their share goes to the others.
+//! 1. Creator fees are held as $EARN on this contract. Any $EARN sent here
+//!    counts (plain `ft_transfer` or `ft_transfer_call`).
+//! 2. The owner pulls the gacha with `draw(holders)`, passing the current
+//!    holder list from an indexer. The contract stores a hash of that list,
+//!    picks 10 random accounts from it with NEAR's on-chain randomness,
+//!    re-checks each one's real $EARN balance on the token contract, and
+//!    sends the whole pool, split equally, to those holding `min_hold`.
+//! 3. Picks below `min_hold` (sold, or never held) get nothing and their share
+//!    goes to the others. Failed transfers stay in the pool for next time.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde_json::json;
-use near_sdk::store::{LookupMap, Vector};
+use near_sdk::store::{IterableSet, Vector};
 use near_sdk::{
     env, ext_contract, log, near, require, AccountId, BorshStorageKey, Gas, NearToken,
-    PanicOnDefault, Promise, PromiseResult,
+    PanicOnDefault, Promise, PromiseOrValue, PromiseResult,
 };
 
-/// Deposit required to join the raffle. Covers storage and is refunded on `leave`.
-pub const ENTRY_DEPOSIT: NearToken = NearToken::from_millinear(10); // 0.01 NEAR
-/// Balance always kept on the contract for storage and gas, never paid out.
+/// NEAR always kept on the contract for storage and gas.
 pub const RESERVE: NearToken = NearToken::from_millinear(500); // 0.5 NEAR
 pub const DEFAULT_WINNERS: u32 = 10;
+pub const MAX_WINNERS: u32 = 10;
+/// Upper bound on one holder snapshot, to keep `draw` within gas.
+pub const MAX_SNAPSHOT: usize = 5_000;
 
 const GAS_FOR_BALANCE_CHECK: Gas = Gas::from_tgas(5);
-const GAS_FOR_ENTER_CALLBACK: Gas = Gas::from_tgas(10);
-const GAS_FOR_DRAW_CALLBACK: Gas = Gas::from_tgas(60);
+const GAS_FOR_FT_TRANSFER: Gas = Gas::from_tgas(8);
+const GAS_FOR_PAYOUT_CALLBACK: Gas = Gas::from_tgas(25);
+const GAS_FOR_DRAW_CALLBACK: Gas = Gas::from_tgas(150);
 
 const EVENT_STANDARD: &str = "earn-gacha";
-const EVENT_VERSION: &str = "1.0.0";
+const EVENT_VERSION: &str = "2.0.0";
 
 #[ext_contract(ext_ft)]
 #[allow(dead_code)]
 trait FungibleToken {
     fn ft_balance_of(&self, account_id: AccountId) -> U128;
+    fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>);
 }
 
 #[derive(BorshStorageKey)]
 #[near]
 enum StorageKey {
-    Entrants,
-    EntrantIndex,
     Rounds,
+    Excluded,
 }
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Winner {
     pub account_id: AccountId,
+    /// $EARN, in the token's smallest unit.
     pub amount: U128,
 }
 
@@ -62,12 +65,20 @@ pub struct Winner {
 pub struct Round {
     pub id: u32,
     pub timestamp: U64,
+    /// $EARN on the contract when the draw ran.
     pub prize_pool: U128,
-    pub entrants: u32,
+    /// Website batch this draw was for (30-minute windows), if any.
+    pub batch: Option<U64>,
+    /// Number of accounts in the holder snapshot used for this draw.
+    pub snapshot_size: u32,
+    /// sha256 (hex) of the snapshot account ids joined with "\n".
+    pub snapshot_hash: String,
     pub winners: Vec<Winner>,
-    /// Picked accounts that no longer held enough tokens.
+    /// Picked accounts holding less than `min_hold` (or whose check failed).
     pub disqualified: Vec<AccountId>,
-    /// Amount that stayed in the pool (rounding dust, or nobody qualified).
+    /// Winners whose transfer failed; their share stays in the pool.
+    pub failed_payouts: Vec<AccountId>,
+    /// $EARN left in the pool after this draw.
     pub rolled_over: U128,
 }
 
@@ -75,8 +86,10 @@ pub struct Round {
 #[derive(Clone, Debug)]
 pub struct PendingDraw {
     pub round_id: u32,
-    pub prize: U128,
     pub candidates: Vec<AccountId>,
+    pub batch: Option<U64>,
+    pub snapshot_size: u32,
+    pub snapshot_hash: String,
     pub started_at: U64,
 }
 
@@ -86,19 +99,15 @@ pub struct Config {
     pub token_id: AccountId,
     pub min_hold: U128,
     pub winners_per_draw: u32,
-    pub draw_interval_sec: U64,
-    pub entry_deposit: U128,
-    pub reserve: U128,
+    pub max_snapshot: u32,
 }
 
 #[near(serializers = [json])]
 pub struct Stats {
-    pub prize_pool: U128,
-    pub entrants: u32,
     pub rounds: u32,
+    /// Total $EARN paid to holders.
     pub total_paid: U128,
     pub last_draw_at: U64,
-    pub next_draw_at: U64,
     pub draw_in_progress: bool,
 }
 
@@ -109,12 +118,9 @@ pub struct EarnGacha {
     token_id: AccountId,
     min_hold: u128,
     winners_per_draw: u32,
-    draw_interval_ns: u64,
     last_draw_ns: u64,
-    entrants: Vector<AccountId>,
-    entrant_index: LookupMap<AccountId, u32>,
-    /// Entry deposits we owe back to entrants. Never part of the prize pool.
-    held_deposits: u128,
+    /// Accounts that can never win: pools, exchanges, team wallets, etc.
+    excluded: IterableSet<AccountId>,
     rounds: Vector<Round>,
     pending: Option<PendingDraw>,
     total_paid: u128,
@@ -127,21 +133,17 @@ impl EarnGacha {
         owner_id: AccountId,
         token_id: AccountId,
         min_hold: U128,
-        draw_interval_sec: U64,
         winners_per_draw: Option<u32>,
     ) -> Self {
         let winners = winners_per_draw.unwrap_or(DEFAULT_WINNERS);
-        require!(winners > 0 && winners <= 20, "winners_per_draw must be 1..=20");
+        require!(winners > 0 && winners <= MAX_WINNERS, "winners_per_draw must be 1..=10");
         Self {
             owner_id,
             token_id,
             min_hold: min_hold.0,
             winners_per_draw: winners,
-            draw_interval_ns: draw_interval_sec.0 * 1_000_000_000,
-            last_draw_ns: env::block_timestamp(),
-            entrants: Vector::new(StorageKey::Entrants),
-            entrant_index: LookupMap::new(StorageKey::EntrantIndex),
-            held_deposits: 0,
+            last_draw_ns: 0,
+            excluded: IterableSet::new(StorageKey::Excluded),
             rounds: Vector::new(StorageKey::Rounds),
             pending: None,
             total_paid: 0,
@@ -149,190 +151,192 @@ impl EarnGacha {
     }
 
     // ------------------------------------------------------------------
-    // Fees
+    // Fees in ($EARN)
     // ------------------------------------------------------------------
 
-    /// Add NEAR to the prize pool. Plain transfers to this account also count;
-    /// this method only adds a log entry so the website can show who funded it.
-    #[payable]
-    pub fn deposit_fees(&mut self) {
-        let amount = env::attached_deposit();
-        require!(!amount.is_zero(), "Attach NEAR to deposit");
-        emit(
-            "deposit",
-            json!({ "account_id": env::predecessor_account_id(), "amount": U128(amount.as_yoctonear()) }),
-        );
-    }
-
-    // ------------------------------------------------------------------
-    // Entering and leaving
-    // ------------------------------------------------------------------
-
-    /// Join the raffle. Attach `ENTRY_DEPOSIT` (0.01 NEAR, refunded on `leave`).
-    /// The token balance is checked on the token contract first.
-    #[payable]
-    pub fn enter(&mut self) -> Promise {
-        let account_id = env::predecessor_account_id();
-        let deposit = env::attached_deposit();
-        require!(deposit >= ENTRY_DEPOSIT, "Attach 0.01 NEAR to enter");
-        require!(!self.entrant_index.contains_key(&account_id), "Already entered");
-
-        // Hold the full deposit until the callback decides; it refunds any excess.
-        self.held_deposits += deposit.as_yoctonear();
-
-        ext_ft::ext(self.token_id.clone())
-            .with_static_gas(GAS_FOR_BALANCE_CHECK)
-            .ft_balance_of(account_id.clone())
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(GAS_FOR_ENTER_CALLBACK)
-                    .on_enter_checked(account_id, U128(deposit.as_yoctonear())),
-            )
-    }
-
-    #[private]
-    pub fn on_enter_checked(&mut self, account_id: AccountId, deposit: U128) -> bool {
-        let balance = read_u128_result(0);
-        self.held_deposits -= deposit.0;
-
-        let ok = matches!(balance, Some(b) if b >= self.min_hold)
-            && !self.entrant_index.contains_key(&account_id);
-        if !ok {
-            let _ = Promise::new(account_id.clone()).transfer(NearToken::from_yoctonear(deposit.0));
-            log!("{} does not hold enough tokens; deposit refunded", account_id);
-            return false;
+    /// NEP-141 receiver: accepts $EARN sent with `ft_transfer_call` into the
+    /// prize pool. Other tokens are returned.
+    pub fn ft_on_transfer(
+        &mut self,
+        sender_id: AccountId,
+        amount: U128,
+        #[allow(unused_variables)] msg: String,
+    ) -> PromiseOrValue<U128> {
+        if env::predecessor_account_id() != self.token_id {
+            return PromiseOrValue::Value(amount);
         }
-
-        self.held_deposits += ENTRY_DEPOSIT.as_yoctonear();
-        let excess = deposit.0 - ENTRY_DEPOSIT.as_yoctonear();
-        if excess > 0 {
-            let _ = Promise::new(account_id.clone()).transfer(NearToken::from_yoctonear(excess));
-        }
-        self.add_entrant(account_id.clone());
-        emit("enter", json!({ "account_id": account_id, "balance": U128(balance.unwrap_or(0)) }));
-        true
-    }
-
-    /// Leave the raffle and get the entry deposit back.
-    pub fn leave(&mut self) -> Promise {
-        let account_id = env::predecessor_account_id();
-        require!(self.remove_entrant(&account_id), "Not entered");
-        self.held_deposits -= ENTRY_DEPOSIT.as_yoctonear();
-        emit("leave", json!({ "account_id": account_id }));
-        Promise::new(account_id).transfer(ENTRY_DEPOSIT)
+        emit("deposit", json!({ "account_id": sender_id, "amount": amount }));
+        PromiseOrValue::Value(U128(0))
     }
 
     // ------------------------------------------------------------------
-    // Drawing
+    // Drawing (owner only)
     // ------------------------------------------------------------------
 
-    /// Pull the gacha. Anyone can call once the draw interval has passed
-    /// (the owner can call any time). Attach 300 Tgas.
-    pub fn draw(&mut self) -> Promise {
+    /// Pull the gacha and pay the winners in $EARN. Owner only. Attach 300 Tgas.
+    ///
+    /// `holders` is the list to draw from (e.g. everyone who joined a website
+    /// batch). Order does not matter; duplicates, excluded accounts and this
+    /// contract are skipped. Every pick's balance is re-checked on the token
+    /// contract. `batch` is just recorded with the round.
+    pub fn draw(&mut self, holders: Vec<AccountId>, batch: Option<U64>) -> Promise {
+        self.assert_owner();
         require!(self.pending.is_none(), "A draw is already in progress");
-        let now = env::block_timestamp();
-        let caller = env::predecessor_account_id();
-        require!(
-            caller == self.owner_id || now >= self.last_draw_ns + self.draw_interval_ns,
-            "Too early: wait for the next draw time"
-        );
-        let prize = self.prize_pool();
-        require!(prize > 0, "Prize pool is empty");
-        let n = self.entrants.len();
-        require!(n > 0, "No entrants");
+        require!(!holders.is_empty(), "Holder list is empty");
+        require!(holders.len() <= MAX_SNAPSHOT, "Holder list too long (max 5000)");
 
+        let now = env::block_timestamp();
         let round_id = self.rounds.len();
-        let picks = pick_unique(n, self.winners_per_draw.min(n), &env::random_seed_array(), round_id);
-        let candidates: Vec<AccountId> =
-            picks.into_iter().map(|i| self.entrants[i].clone()).collect();
+        let snapshot_hash = hex(&env::sha256_array(
+            holders.iter().map(|a| a.as_str()).collect::<Vec<_>>().join("\n").as_bytes(),
+        ));
+        let me = env::current_account_id();
+        let candidates = pick_accounts(
+            &holders,
+            self.winners_per_draw as usize,
+            &env::random_seed_array(),
+            round_id,
+            |a| a == &me || a == &self.token_id || self.excluded.contains(a),
+        );
+        require!(!candidates.is_empty(), "No eligible holders in the list");
 
         self.pending = Some(PendingDraw {
             round_id,
-            prize: U128(prize),
             candidates: candidates.clone(),
+            batch,
+            snapshot_size: holders.len() as u32,
+            snapshot_hash,
             started_at: U64(now),
         });
         self.last_draw_ns = now;
 
+        // Result 0: our own $EARN balance (the prize pool). Results 1..: candidates.
+        let token = self.token_id.clone();
+        let balance_of = |a: AccountId| {
+            ext_ft::ext(token.clone()).with_static_gas(GAS_FOR_BALANCE_CHECK).ft_balance_of(a)
+        };
         let checks = candidates
-            .iter()
-            .map(|a| {
-                ext_ft::ext(self.token_id.clone())
-                    .with_static_gas(GAS_FOR_BALANCE_CHECK)
-                    .ft_balance_of(a.clone())
-            })
-            .reduce(|a, b| a.and(b))
-            .expect("at least one candidate");
+            .into_iter()
+            .fold(balance_of(me.clone()), |acc, a| acc.and(balance_of(a)));
 
-        checks.then(
-            Self::ext(env::current_account_id())
-                .with_static_gas(GAS_FOR_DRAW_CALLBACK)
-                .on_draw_checked(),
-        )
+        checks.then(Self::ext(me).with_static_gas(GAS_FOR_DRAW_CALLBACK).on_draw_checked())
     }
 
-    /// Pays every candidate that still holds enough tokens. Written so it
-    /// cannot panic: a stuck draw would lock the pool.
+    /// Decides the winners and sends their $EARN. Must not panic, so a draw
+    /// can never get stuck halfway.
     #[private]
-    pub fn on_draw_checked(&mut self) -> Round {
-        let pending = self.pending.take().expect("No pending draw");
-        let prize = pending.prize.0;
+    pub fn on_draw_checked(&mut self) -> PromiseOrValue<Round> {
+        let Some(pending) = self.pending.clone() else {
+            return PromiseOrValue::Value(self.empty_round(0));
+        };
+
+        let Some(pool) = read_u128_result(0) else {
+            log!("Could not read the prize pool; draw cancelled");
+            self.pending = None;
+            return PromiseOrValue::Value(self.empty_round(pending.round_id));
+        };
 
         let mut qualified = Vec::new();
         let mut disqualified = Vec::new();
         for (i, account_id) in pending.candidates.iter().enumerate() {
-            match read_u128_result(i as u64) {
+            match read_u128_result(i as u64 + 1) {
                 Some(b) if b >= self.min_hold => qualified.push(account_id.clone()),
-                Some(_) => {
-                    // Sold their tokens: remove them and refund their entry deposit.
-                    if self.remove_entrant(account_id) {
-                        self.held_deposits -= ENTRY_DEPOSIT.as_yoctonear();
-                        let _ = Promise::new(account_id.clone()).transfer(ENTRY_DEPOSIT);
-                    }
-                    disqualified.push(account_id.clone());
-                }
-                // Token contract call failed: skip this round, keep them entered.
-                None => disqualified.push(account_id.clone()),
+                _ => disqualified.push(account_id.clone()),
             }
         }
+
+        let share = if qualified.is_empty() { 0 } else { pool / qualified.len() as u128 };
+        if share == 0 {
+            self.pending = None;
+            let round = self.record_round(&pending, pool, vec![], disqualified, vec![], pool);
+            return PromiseOrValue::Value(round);
+        }
+
+        let memo = format!("EARN gacha draw #{}", pending.round_id + 1);
+        let token = self.token_id.clone();
+        let transfer = |a: &AccountId| {
+            ext_ft::ext(token.clone())
+                .with_attached_deposit(NearToken::from_yoctonear(1))
+                .with_static_gas(GAS_FOR_FT_TRANSFER)
+                .ft_transfer(a.clone(), U128(share), Some(memo.clone()))
+        };
+        let payouts = qualified[1..]
+            .iter()
+            .fold(transfer(&qualified[0]), |acc, a| acc.and(transfer(a)));
+
+        PromiseOrValue::Promise(payouts.then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(GAS_FOR_PAYOUT_CALLBACK)
+                .on_payouts_done(U128(pool), U128(share), qualified, disqualified),
+        ))
+    }
+
+    /// Records which transfers went through and closes the draw.
+    #[private]
+    pub fn on_payouts_done(
+        &mut self,
+        pool: U128,
+        share: U128,
+        qualified: Vec<AccountId>,
+        disqualified: Vec<AccountId>,
+    ) -> Round {
+        let pending = self.pending.take().unwrap_or(PendingDraw {
+            round_id: self.rounds.len(),
+            candidates: vec![],
+            batch: None,
+            snapshot_size: 0,
+            snapshot_hash: String::new(),
+            started_at: U64(self.last_draw_ns),
+        });
 
         let mut winners = Vec::new();
-        let mut paid = 0u128;
-        if !qualified.is_empty() {
-            let share = prize / qualified.len() as u128;
-            if share > 0 {
-                for account_id in qualified {
-                    let _ = Promise::new(account_id.clone()).transfer(NearToken::from_yoctonear(share));
-                    paid += share;
-                    winners.push(Winner { account_id, amount: U128(share) });
-                }
+        let mut failed = Vec::new();
+        for (i, account_id) in qualified.into_iter().enumerate() {
+            if promise_ok(i as u64) {
+                winners.push(Winner { account_id, amount: share });
+            } else {
+                failed.push(account_id);
             }
         }
+        let paid = share.0 * winners.len() as u128;
         self.total_paid += paid;
-
-        let round = Round {
-            id: pending.round_id,
-            timestamp: pending.started_at,
-            prize_pool: U128(prize),
-            entrants: self.entrants.len(),
-            winners,
-            disqualified,
-            rolled_over: U128(prize - paid),
-        };
-        self.rounds.push(round.clone());
-        emit("draw", json!(round));
-        round
+        self.record_round(&pending, pool.0, winners, disqualified, failed, pool.0 - paid)
     }
 
     // ------------------------------------------------------------------
     // Owner
     // ------------------------------------------------------------------
 
-    /// Clears a draw whose callback never ran. The prize was never sent,
-    /// so it simply returns to the pool.
+    /// Clears a draw whose callbacks never ran. No $EARN was sent, so the
+    /// pool is untouched.
     pub fn cancel_pending_draw(&mut self) {
         self.assert_owner();
         require!(self.pending.take().is_some(), "No pending draw");
+    }
+
+    /// Sends spare NEAR (e.g. fees the launchpad paid in NEAR) to the owner,
+    /// so it can be swapped to $EARN and sent back to the pool.
+    pub fn withdraw_near(&mut self, amount: Option<U128>) -> Promise {
+        self.assert_owner();
+        let spare = self.spare_near();
+        let amount = amount.map(|a| a.0).unwrap_or(spare);
+        require!(amount > 0 && amount <= spare, "Not enough spare NEAR");
+        Promise::new(self.owner_id.clone()).transfer(NearToken::from_yoctonear(amount))
+    }
+
+    /// Accounts that can never win (liquidity pools, exchanges, team wallets).
+    pub fn add_excluded(&mut self, account_ids: Vec<AccountId>) {
+        self.assert_owner();
+        for a in account_ids {
+            self.excluded.insert(a);
+        }
+    }
+
+    pub fn remove_excluded(&mut self, account_ids: Vec<AccountId>) {
+        self.assert_owner();
+        for a in account_ids {
+            self.excluded.remove(&a);
+        }
     }
 
     pub fn set_min_hold(&mut self, min_hold: U128) {
@@ -340,14 +344,12 @@ impl EarnGacha {
         self.min_hold = min_hold.0;
     }
 
-    pub fn set_draw_interval(&mut self, draw_interval_sec: U64) {
-        self.assert_owner();
-        self.draw_interval_ns = draw_interval_sec.0 * 1_000_000_000;
-    }
-
     pub fn set_winners_per_draw(&mut self, winners_per_draw: u32) {
         self.assert_owner();
-        require!(winners_per_draw > 0 && winners_per_draw <= 20, "winners_per_draw must be 1..=20");
+        require!(
+            winners_per_draw > 0 && winners_per_draw <= MAX_WINNERS,
+            "winners_per_draw must be 1..=10"
+        );
         self.winners_per_draw = winners_per_draw;
     }
 
@@ -366,39 +368,26 @@ impl EarnGacha {
             token_id: self.token_id.clone(),
             min_hold: U128(self.min_hold),
             winners_per_draw: self.winners_per_draw,
-            draw_interval_sec: U64(self.draw_interval_ns / 1_000_000_000),
-            entry_deposit: U128(ENTRY_DEPOSIT.as_yoctonear()),
-            reserve: U128(RESERVE.as_yoctonear()),
+            max_snapshot: MAX_SNAPSHOT as u32,
         }
     }
 
     pub fn get_stats(&self) -> Stats {
         Stats {
-            prize_pool: U128(self.prize_pool()),
-            entrants: self.entrants.len(),
             rounds: self.rounds.len(),
             total_paid: U128(self.total_paid),
             last_draw_at: U64(self.last_draw_ns),
-            next_draw_at: U64(self.last_draw_ns + self.draw_interval_ns),
             draw_in_progress: self.pending.is_some(),
         }
     }
 
-    /// NEAR available to win right now.
-    pub fn get_prize_pool(&self) -> U128 {
-        U128(self.prize_pool())
+    /// NEAR the owner can withdraw.
+    pub fn get_spare_near(&self) -> U128 {
+        U128(self.spare_near())
     }
 
-    pub fn is_entered(&self, account_id: AccountId) -> bool {
-        self.entrant_index.contains_key(&account_id)
-    }
-
-    pub fn get_entrants(&self, from_index: Option<u32>, limit: Option<u32>) -> Vec<AccountId> {
-        let from = from_index.unwrap_or(0);
-        let limit = limit.unwrap_or(50).min(200);
-        (from..self.entrants.len().min(from.saturating_add(limit)))
-            .map(|i| self.entrants[i].clone())
-            .collect()
+    pub fn get_excluded(&self) -> Vec<AccountId> {
+        self.excluded.iter().cloned().collect()
     }
 
     /// Most recent rounds first.
@@ -428,55 +417,93 @@ impl EarnGacha {
         require!(env::predecessor_account_id() == self.owner_id, "Only the owner can do this");
     }
 
-    /// Everything on the account except storage, entry deposits, the safety
-    /// reserve, and any prize already promised to a running draw.
-    fn prize_pool(&self) -> u128 {
+    fn spare_near(&self) -> u128 {
         let balance = env::account_balance().as_yoctonear();
         let storage = env::storage_byte_cost().as_yoctonear() * env::storage_usage() as u128;
-        let pending = self.pending.as_ref().map(|p| p.prize.0).unwrap_or(0);
-        balance.saturating_sub(storage + self.held_deposits + RESERVE.as_yoctonear() + pending)
+        balance.saturating_sub(storage + RESERVE.as_yoctonear())
     }
 
-    fn add_entrant(&mut self, account_id: AccountId) {
-        let idx = self.entrants.len();
-        self.entrants.push(account_id.clone());
-        self.entrant_index.insert(account_id, idx);
-    }
-
-    /// O(1) swap-remove. Returns false if the account was not entered.
-    fn remove_entrant(&mut self, account_id: &AccountId) -> bool {
-        let Some(idx) = self.entrant_index.remove(account_id) else {
-            return false;
-        };
-        let last = self.entrants.len() - 1;
-        if idx != last {
-            let moved = self.entrants[last].clone();
-            self.entrants[idx] = moved.clone();
-            self.entrant_index.insert(moved, idx);
+    fn empty_round(&self, id: u32) -> Round {
+        Round {
+            id,
+            timestamp: U64(env::block_timestamp()),
+            prize_pool: U128(0),
+            batch: None,
+            snapshot_size: 0,
+            snapshot_hash: String::new(),
+            winners: vec![],
+            disqualified: vec![],
+            failed_payouts: vec![],
+            rolled_over: U128(0),
         }
-        self.entrants.pop();
-        true
+    }
+
+    fn record_round(
+        &mut self,
+        pending: &PendingDraw,
+        pool: u128,
+        winners: Vec<Winner>,
+        disqualified: Vec<AccountId>,
+        failed_payouts: Vec<AccountId>,
+        rolled_over: u128,
+    ) -> Round {
+        let round = Round {
+            id: pending.round_id,
+            timestamp: pending.started_at,
+            prize_pool: U128(pool),
+            batch: pending.batch,
+            snapshot_size: pending.snapshot_size,
+            snapshot_hash: pending.snapshot_hash.clone(),
+            winners,
+            disqualified,
+            failed_payouts,
+            rolled_over: U128(rolled_over),
+        };
+        self.rounds.push(round.clone());
+        emit("draw", json!(round));
+        round
     }
 }
 
-/// Picks `k` distinct indices from `0..n` with a partial Fisher–Yates shuffle,
-/// using sha256(seed || round || step) as the random source.
-pub fn pick_unique(n: u32, k: u32, seed: &[u8; 32], round: u32) -> Vec<u32> {
+/// Picks up to `k` distinct accounts from `list` in random order (lazy
+/// Fisher–Yates), skipping duplicates and accounts where `skip` is true.
+pub fn pick_accounts(
+    list: &[AccountId],
+    k: usize,
+    seed: &[u8; 32],
+    round: u32,
+    skip: impl Fn(&AccountId) -> bool,
+) -> Vec<AccountId> {
+    let n = list.len() as u32;
     let mut swaps: HashMap<u32, u32> = HashMap::new();
-    let mut out = Vec::with_capacity(k as usize);
-    for i in 0..k {
-        let mut data = seed.to_vec();
-        data.extend_from_slice(&round.to_le_bytes());
-        data.extend_from_slice(&i.to_le_bytes());
-        let hash = env::sha256_array(&data);
-        let r = u64::from_le_bytes(hash[..8].try_into().unwrap());
-        let j = i + (r % (n - i) as u64) as u32;
+    let mut seen: HashSet<&AccountId> = HashSet::new();
+    let mut out = Vec::with_capacity(k);
+    for i in 0..n {
+        if out.len() == k {
+            break;
+        }
+        let j = i + (rand_u64(seed, round, i) % (n - i) as u64) as u32;
         let vj = *swaps.get(&j).unwrap_or(&j);
         let vi = *swaps.get(&i).unwrap_or(&i);
         swaps.insert(j, vi);
-        out.push(vj);
+        let a = &list[vj as usize];
+        if !skip(a) && seen.insert(a) {
+            out.push(a.clone());
+        }
     }
     out
+}
+
+fn rand_u64(seed: &[u8; 32], round: u32, step: u32) -> u64 {
+    let mut data = seed.to_vec();
+    data.extend_from_slice(&round.to_le_bytes());
+    data.extend_from_slice(&step.to_le_bytes());
+    let hash = env::sha256_array(&data);
+    u64::from_le_bytes(hash[..8].try_into().unwrap())
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// Reads a `U128` returned by a cross-contract call. `None` if it failed.
@@ -488,6 +515,12 @@ fn read_u128_result(index: u64) -> Option<u128> {
         }
         _ => None,
     }
+}
+
+/// True if the cross-contract call at `index` succeeded.
+#[allow(deprecated)]
+fn promise_ok(index: u64) -> bool {
+    matches!(env::promise_result(index), PromiseResult::Successful(_))
 }
 
 fn emit(event: &str, data: near_sdk::serde_json::Value) {

@@ -7,16 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "serve -s dist -l tcp://0.0.0.0:${PORT:-3000}"
+    "start": "node server/index.mjs",
+    "draw": "node server/draw.mjs"
   },
   "dependencies": {
-    "@near-wallet-selector/core": "^10.1.4",
-    "@near-wallet-selector/here-wallet": "^10.1.4",
-    "@near-wallet-selector/meteor-wallet": "^10.1.4",
-    "@near-wallet-selector/modal-ui": "^10.1.4",
-    "@near-wallet-selector/my-near-wallet": "^10.1.4",
-    "buffer": "^6.0.3",
-    "serve": "^14.2.4"
+    "near-api-js": "^7.3.1"
   },
   "devDependencies": {
     "vite": "^6.3.5"

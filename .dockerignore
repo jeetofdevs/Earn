@@ -4,3 +4,4 @@ contract/target
 .git
 .env
 web/.env
+web/data

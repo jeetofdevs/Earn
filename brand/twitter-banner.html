@@ -4,30 +4,51 @@
 <style>
   html,body{margin:0;width:1500px;height:500px;overflow:hidden;background:#FF6A00}
   .b{position:relative;width:1500px;height:500px;font-family:'Space Grotesk',system-ui,sans-serif;color:#141414;
-     background:radial-gradient(900px 420px at 70% 115%,#FF9A3D 0%,#FF7A12 55%,#FF6A00 100%)}
-  .grid{position:absolute;inset:0;opacity:.12;background-image:linear-gradient(#141414 1px,transparent 1px),linear-gradient(90deg,#141414 1px,transparent 1px);background-size:50px 50px;
-     -webkit-mask-image:radial-gradient(700px 300px at 70% 100%,#000,transparent)}
-  .txt{position:absolute;left:470px;top:92px}
-  h1{margin:0;font-size:128px;line-height:1;letter-spacing:-4px;font-weight:700}
-  h1 span{color:#FFFFFF}
-  p{margin:18px 0 0;font-size:34px;font-weight:500;color:#2A1405}
-  p b{color:#FFFFFF;-webkit-text-stroke:1.5px #141414}
-  .tag{display:inline-flex;gap:10px;align-items:center;margin-top:26px;padding:10px 20px;border:3px solid #141414;background:#FFFFFF;border-radius:999px;font-size:22px;font-weight:700;color:#141414;letter-spacing:2px}
-  .logo{position:absolute;left:120px;top:70px;width:300px;height:300px;border-radius:66px;border:6px solid #141414;box-shadow:10px 10px 0 #141414}
-  .cap{position:absolute;border-radius:50%;background:linear-gradient(#FFFFFF 0 50%,#FFD3B0 50% 100%);border:5px solid #141414;box-sizing:border-box}
-  .cap::after{content:"";position:absolute;left:0;right:0;top:calc(50% - 3px);height:6px;background:#141414}
+     background:radial-gradient(900px 420px at 75% 120%,#FF9A3D 0%,#FF7A12 55%,#FF6A00 100%)}
+  .grid{position:absolute;inset:0;opacity:.1;background-image:linear-gradient(#141414 1px,transparent 1px),linear-gradient(90deg,#141414 1px,transparent 1px);background-size:50px 50px;
+     -webkit-mask-image:radial-gradient(800px 320px at 75% 100%,#000,transparent)}
+  /* logo kept high so the X profile photo (bottom-left) doesn't cover it */
+  .logo{position:absolute;left:96px;top:56px;width:230px;height:230px;border-radius:52px;border:6px solid #141414;box-shadow:9px 9px 0 #141414;transform:rotate(-5deg)}
+  .txt{position:absolute;left:400px;top:70px;width:560px}
+  h1{margin:0;font-size:116px;line-height:.95;letter-spacing:-4px;font-weight:700}
+  h1 span{color:#fff}
+  .steps{margin:22px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:30px;font-weight:700}
+  .steps li{display:flex;align-items:center;gap:14px}
+  .steps i{font-style:normal;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#fff;border:3px solid #141414;font-size:22px}
+  .tag{position:absolute;left:400px;top:404px;display:inline-flex;gap:10px;align-items:center;padding:8px 18px;border:3px solid #141414;background:#fff;border-radius:999px;font-size:20px;font-weight:700;letter-spacing:2px}
+
+  /* mock join card */
+  .card{position:absolute;left:1010px;top:70px;width:400px;background:#fff;border:5px solid #141414;border-radius:28px;box-shadow:10px 10px 0 #141414;padding:24px 26px;box-sizing:border-box;transform:rotate(2deg)}
+  .row{display:flex;justify-content:space-between;align-items:center}
+  .card h3{margin:0;font-size:26px;letter-spacing:-.5px}
+  .pill{border:3px solid #141414;border-radius:999px;padding:4px 12px;font-weight:700;background:#FF6A00;font-size:17px}
+  .input{margin-top:18px;border:3px solid #141414;border-radius:999px;padding:12px 18px;font-size:20px;color:#8a6a55;background:#fff3e8}
+  .btn{margin-top:12px;background:#141414;color:#fff;border-radius:999px;padding:13px 0;text-align:center;font-weight:700;font-size:21px;box-shadow:4px 4px 0 #FF6A00}
+  .ok{margin-top:14px;border:3px solid #141414;border-radius:14px;padding:9px 12px;background:#d9ffe9;font-weight:700;font-size:16px}
+  .prize{position:absolute;left:1060px;top:385px;font-size:22px;font-weight:700;background:#141414;color:#fff;border-radius:16px;padding:12px 18px;transform:rotate(-2deg)}
+  .prize b{color:#FFC524}
+  .coin{position:absolute;width:64px;height:64px;border-radius:50%;background:#FFC524;border:5px solid #141414;display:grid;place-items:center;font-weight:900;font-size:30px;box-sizing:border-box}
 </style></head>
 <body><div class="b">
   <div class="grid"></div>
   <img class="logo" src="logo.svg">
   <div class="txt">
     <h1>EARN<span>.</span></h1>
-    <p><b>100%</b> of creator fees &rarr; <b>10</b> random holders.</p>
-    <p style="margin-top:6px">Hold. Enter. Pull the gacha.</p>
-    <div class="tag">BUILT ON NEAR</div>
+    <ul class="steps">
+      <li><i>1</i>Hold $EARN</li>
+      <li><i>2</i>Submit your address</li>
+      <li><i>3</i>10 holders win every 30 min</li>
+    </ul>
   </div>
-  <div class="cap" style="width:120px;height:120px;left:1250px;top:60px"></div>
-  <div class="cap" style="width:70px;height:70px;left:1380px;top:230px;opacity:.85"></div>
-  <div class="cap" style="width:90px;height:90px;left:1200px;top:330px;opacity:.7"></div>
-  <div class="cap" style="width:46px;height:46px;left:1150px;top:215px;opacity:.6"></div>
+  <div class="tag">100% OF FEES · PAID IN $EARN · ON NEAR</div>
+
+  <div class="card">
+    <div class="row"><h3>Join this batch</h3><span class="pill">29:59</span></div>
+    <div class="input">yourname.near</div>
+    <div class="btn">Join batch</div>
+    <div class="ok">✓ You're in! No wallet connect needed.</div>
+  </div>
+  <div class="prize">🎰 10 winners split <b>100%</b> of fees</div>
+  <div class="coin" style="left:965px;top:330px;transform:rotate(-12deg)">$</div>
+  <div class="coin" style="left:1430px;top:300px;width:48px;height:48px;font-size:22px">$</div>
 </div></body></html>

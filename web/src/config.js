@@ -6,4 +6,3 @@ export const RPC_URL =
 export const EXPLORER_URL =
   NETWORK === "mainnet" ? "https://nearblocks.io" : "https://testnet.nearblocks.io";
 
-export const TGAS = 1_000_000_000_000n;
