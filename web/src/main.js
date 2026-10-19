@@ -44,6 +44,13 @@ const spin = (on) => $("machine").classList.toggle("spinning", on);
 
 // ---------------------------------------------------------------- data
 
+/** Token symbol, decimals and minimum, as the server checks them. */
+function applyRules(r) {
+  token = { symbol: r.symbol, decimals: r.decimals };
+  document.querySelectorAll(".sym").forEach((el) => (el.textContent = `$${token.symbol}`));
+  $("min-hold").textContent = BigInt(r.min_hold) > 0n ? `at least ${earn(r.min_hold)}` : "any amount of";
+}
+
 async function loadToken() {
   try {
     const meta = await view(config.token_id, "ft_metadata");
@@ -51,8 +58,7 @@ async function loadToken() {
   } catch {
     // Keep the $EARN defaults if metadata can't be read.
   }
-  document.querySelectorAll(".sym").forEach((el) => (el.textContent = `$${token.symbol}`));
-  $("min-hold").textContent = earn(config.min_hold);
+  applyRules({ ...token, min_hold: config.min_hold });
 }
 
 async function refresh() {
@@ -151,6 +157,7 @@ async function loadBatch() {
     $("join-timer").textContent = "Joining offline";
     return;
   }
+  if (batch.rules) applyRules(batch.rules);
   $("batch-entries").textContent = batch.entries.toLocaleString();
   $("batch-time").textContent = `${hhmm(batch.starts_at)}–${hhmm(batch.ends_at)}`;
   if (batch.joined) showJoined(savedAccount());
@@ -197,7 +204,9 @@ async function join(e) {
     }
     out.className = "check-result no";
     out.textContent = data.error === "not_enough"
-      ? `✗ ${account} holds ${earn(data.balance)} $${token.symbol}. You need at least ${earn(data.min_hold)} to join.`
+      ? BigInt(data.min_hold) > 0n
+        ? `✗ ${account} holds ${earn(data.balance)} $${token.symbol}. You need at least ${earn(data.min_hold)} to join.`
+        : `✗ ${account} doesn't hold any $${token.symbol}. Buy some, then join.`
       : `✗ ${data.error || "Couldn't join. Try again."}`;
   } catch {
     out.className = "check-result no";
@@ -226,32 +235,31 @@ function showCa() {
 async function main() {
   fillDome();
   showCa();
-  if (!CONTRACT_ID) {
-    $("status").textContent = "EARN Gacha will be live soon.";
-    $("join-timer").textContent = "Will be live soon";
-    $("join-btn").disabled = true;
-    $("contract-link").textContent = "";
-    return;
-  }
-  $("contract-link").innerHTML = `<a href="${EXPLORER_URL}/address/${CONTRACT_ID}" target="_blank" rel="noopener">${CONTRACT_ID}</a>`;
   $("join-form").onsubmit = join;
   $("join-account").value = savedAccount();
   $("reveal-close").onclick = () => ($("reveal").hidden = true);
+  $("contract-link").textContent = "";
 
-  try {
-    config = await gacha("get_config");
-  } catch {
-    $("status").textContent = "EARN Gacha will be live soon.";
-    $("join-timer").textContent = "Will be live soon";
-    $("join-btn").disabled = true;
-    $("contract-link").textContent = "";
-    return;
-  }
-  await loadToken();
-  await Promise.all([refresh(), loadBatch()]);
-  setInterval(refresh, 15_000);
+  // Joining works on its own (the server saves every batch), so start it first.
+  await loadBatch();
   setInterval(loadBatch, 30_000);
   setInterval(tick, 1000);
+
+  if (CONTRACT_ID) {
+    try {
+      config = await gacha("get_config");
+    } catch {
+      config = null;
+    }
+  }
+  if (!config) {
+    $("status").textContent = "Joining is open! Submit your address — the first draws are coming soon.";
+    return;
+  }
+  $("contract-link").innerHTML = `<a href="${EXPLORER_URL}/address/${CONTRACT_ID}" target="_blank" rel="noopener">${CONTRACT_ID}</a>`;
+  await loadToken();
+  await refresh();
+  setInterval(refresh, 15_000);
 }
 
 main();

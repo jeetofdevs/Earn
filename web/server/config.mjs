@@ -13,8 +13,18 @@ if (existsSync(envFile)) {
 const env = process.env;
 export const NETWORK = env.VITE_NETWORK || env.NEAR_NETWORK || "mainnet";
 export const CONTRACT_ID = env.VITE_CONTRACT_ID || env.CONTRACT_ID || "";
-export const RPC_URL =
-  env.NEAR_RPC_URL || (NETWORK === "mainnet" ? "https://rpc.mainnet.near.org" : "https://rpc.testnet.near.org");
+/** The $EARN token. Joins are checked against it. */
+export const TOKEN_ID = env.VITE_TOKEN_ID || env.TOKEN_ID || "earn.v2-launchpad.justhoot.near";
+/** Minimum $EARN (whole tokens) to join, used until the gacha contract is live. 0 = any balance. */
+export const MIN_HOLD = env.MIN_HOLD || "0";
+
+/** NEAR RPC endpoints, tried in order. NEAR_RPC_URL (if set) goes first. */
+export const RPC_URLS = [
+  ...(env.NEAR_RPC_URL ? [env.NEAR_RPC_URL] : []),
+  ...(NETWORK === "mainnet"
+    ? ["https://free.rpc.fastnear.com", "https://rpc.mainnet.near.org", "https://near.lava.build"]
+    : ["https://test.rpc.fastnear.com", "https://rpc.testnet.near.org"]),
+];
 export const PORT = Number(env.PORT || 3000);
 export const DATA_DIR = env.DATA_DIR || new URL("../data/", import.meta.url).pathname;
 

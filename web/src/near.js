@@ -1,24 +1,37 @@
-import { CONTRACT_ID, RPC_URL } from "./config.js";
+import { CONTRACT_ID, RPC_URLS } from "./config.js";
+
+let rpcIndex = 0; // last RPC that worked
+
+async function rpcQuery(params) {
+  let lastError;
+  for (let i = 0; i < RPC_URLS.length; i++) {
+    const url = RPC_URLS[(rpcIndex + i) % RPC_URLS.length];
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "earn", method: "query", params }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      rpcIndex = (rpcIndex + i) % RPC_URLS.length;
+      return json;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError;
+}
 
 /** Read-only contract call over JSON-RPC. No wallet needed. */
 export async function view(contractId, method, args = {}) {
-  const res = await fetch(RPC_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: "earn",
-      method: "query",
-      params: {
-        request_type: "call_function",
-        finality: "optimistic",
-        account_id: contractId,
-        method_name: method,
-        args_base64: btoa(JSON.stringify(args)),
-      },
-    }),
+  const json = await rpcQuery({
+    request_type: "call_function",
+    finality: "optimistic",
+    account_id: contractId,
+    method_name: method,
+    args_base64: btoa(JSON.stringify(args)),
   });
-  const json = await res.json();
   if (json.error || json.result?.error) {
     throw new Error(json.error?.data || json.result?.error || "RPC error");
   }

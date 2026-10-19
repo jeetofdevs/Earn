@@ -1,8 +1,9 @@
 // Minimal NEAR helpers shared by the server and the draw CLI.
-import { Account, JsonRpcProvider } from "near-api-js";
-import { CONTRACT_ID, RPC_URL } from "./config.mjs";
+import { Account, FailoverRpcProvider, JsonRpcProvider } from "near-api-js";
+import { CONTRACT_ID, RPC_URLS } from "./config.mjs";
 
-export const provider = new JsonRpcProvider({ url: RPC_URL });
+// Falls back to the next RPC if one is down or rate-limited.
+export const provider = new FailoverRpcProvider(RPC_URLS.map((url) => new JsonRpcProvider({ url })));
 
 export const view = (contractId, method, args = {}) =>
   provider.callFunction({ contractId, method, args });

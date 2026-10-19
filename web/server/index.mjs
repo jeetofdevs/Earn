@@ -11,7 +11,7 @@ import http from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import {
-  AUTO_DRAW, BATCH_MS, CONTRACT_ID, MAX_ENTRIES_PER_BATCH, OWNER_ACCOUNT_ID, OWNER_PRIVATE_KEY, PORT,
+  AUTO_DRAW, BATCH_MS, CONTRACT_ID, MIN_HOLD, TOKEN_ID, MAX_ENTRIES_PER_BATCH, OWNER_ACCOUNT_ID, OWNER_PRIVATE_KEY, PORT,
   batchEnd, batchOf, batchStart,
 } from "./config.mjs";
 import { batchAlreadyDrawn, gacha, isAccountId, sendDraw, view } from "./near.mjs";
@@ -23,16 +23,41 @@ const TYPES = {
   ".png": "image/png", ".json": "application/json", ".ico": "image/x-icon", ".woff2": "font/woff2",
 };
 
-// ---------------------------------------------------------------- contract config (cached)
+// ---------------------------------------------------------------- join rules (cached)
 
-let cfg = null;
-let cfgAt = 0;
-async function contractConfig() {
-  if (!cfg || Date.now() - cfgAt > 60_000) {
-    cfg = await gacha("get_config");
-    cfgAt = Date.now();
+let rulesCache = null;
+let rulesAt = 0;
+
+/**
+ * Which token to check and the minimum balance. Taken from the gacha contract
+ * when it's live; until then from TOKEN_ID and MIN_HOLD, so joining can open
+ * before the contract is deployed.
+ */
+async function rules() {
+  if (rulesCache && Date.now() - rulesAt < 60_000) return rulesCache;
+  let tokenId = TOKEN_ID;
+  let minHold = null;
+  let live = false;
+  if (CONTRACT_ID) {
+    try {
+      const c = await gacha("get_config");
+      tokenId = c.token_id;
+      minHold = BigInt(c.min_hold);
+      live = true;
+    } catch {
+      // Contract not deployed yet: fall back to TOKEN_ID / MIN_HOLD.
+    }
   }
-  return cfg;
+  const meta = await view(tokenId, "ft_metadata").catch(() => ({ symbol: "EARN", decimals: 18 }));
+  if (minHold === null) minHold = parseUnits(MIN_HOLD, meta.decimals);
+  rulesCache = { token_id: tokenId, min_hold: minHold.toString(), symbol: meta.symbol, decimals: meta.decimals, contract_live: live };
+  rulesAt = Date.now();
+  return rulesCache;
+}
+
+function parseUnits(text, decimals) {
+  const [whole, frac = ""] = String(text || "0").trim().split(".");
+  return BigInt(whole || "0") * 10n ** BigInt(decimals) + BigInt((frac + "0".repeat(decimals)).slice(0, decimals) || "0");
 }
 
 // ---------------------------------------------------------------- rate limit
@@ -51,6 +76,7 @@ setInterval(() => hits.clear(), 10 * 60_000).unref();
 
 function batchInfo(id, account) {
   return {
+    rules: rulesCache,
     batch: id,
     starts_at: batchStart(id),
     ends_at: batchEnd(id),
@@ -70,20 +96,21 @@ async function join_(req, res) {
   if (!isAccountId(account)) return send(res, 400, { error: "That doesn't look like a NEAR wallet address." });
   if (CONTRACT_ID && account === CONTRACT_ID) return send(res, 400, { error: "That's the gacha contract." });
 
-  if (!CONTRACT_ID) return send(res, 503, { error: "EARN Gacha will be live soon." });
   const batch = batchOf();
   if (store.has(batch, account)) return send(res, 200, { ok: true, already: true, ...batchInfo(batch, account) });
   if (store.count(batch) >= MAX_ENTRIES_PER_BATCH) return send(res, 409, { error: "This batch is full. Try the next one." });
 
-  let config, balance;
+  let r, balance;
   try {
-    config = await contractConfig();
-    balance = await view(config.token_id, "ft_balance_of", { account_id: account });
+    r = await rules();
+    if (account === r.token_id) return send(res, 400, { error: "That's the token contract." });
+    balance = await view(r.token_id, "ft_balance_of", { account_id: account });
   } catch {
     return send(res, 502, { error: "Couldn't reach NEAR right now. Try again." });
   }
-  if (BigInt(balance) < BigInt(config.min_hold)) {
-    return send(res, 403, { error: "not_enough", balance, min_hold: config.min_hold });
+  // Must hold the minimum, and always more than zero.
+  if (BigInt(balance) === 0n || BigInt(balance) < BigInt(r.min_hold)) {
+    return send(res, 403, { error: "not_enough", balance, min_hold: r.min_hold });
   }
 
   store.add(batch, account);
@@ -93,6 +120,7 @@ async function join_(req, res) {
 async function api(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/batch") {
     const account = url.searchParams.get("account")?.toLowerCase();
+    await rules().catch(() => null);
     return send(res, 200, batchInfo(batchOf(), account));
   }
   if (req.method === "POST" && url.pathname === "/api/join") return join_(req, res);
@@ -190,8 +218,8 @@ http
     }
   })
   .listen(PORT, "0.0.0.0", () => {
-    console.log(`EARN site on :${PORT} · contract ${CONTRACT_ID || "(VITE_CONTRACT_ID not set)"} · ${BATCH_MS / 60_000}-minute batches`);
-    if (AUTO_DRAW) {
+    console.log(`EARN site on :${PORT} · token ${TOKEN_ID} · contract ${CONTRACT_ID || "(not set yet)"} · ${BATCH_MS / 60_000}-minute batches`);
+    if (AUTO_DRAW && CONTRACT_ID) {
       if (!OWNER_ACCOUNT_ID || !OWNER_PRIVATE_KEY) console.error("AUTO_DRAW needs OWNER_ACCOUNT_ID and OWNER_PRIVATE_KEY");
       else {
         console.log(`Auto-draw on as ${OWNER_ACCOUNT_ID}`);

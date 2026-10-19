@@ -94,8 +94,10 @@ The repo has a `Dockerfile` and `railway.json` at the root (and a root
 1. Railway → **New Project → Deploy from GitHub repo** → this repo. Leave **Root Directory** empty.
 2. **Variables:**
    - `VITE_NETWORK` = `mainnet`
-   - `VITE_CONTRACT_ID` = your contract account
    - `DATA_DIR` = `/data`
+   - `MIN_HOLD` = minimum $EARN to join before the contract is live (`0` = any balance)
+   - `VITE_CONTRACT_ID` = your gacha contract, once deployed. Leave it unset
+     until then: joining is already open and every batch is saved.
    - for auto-draw: `AUTO_DRAW` = `true`, `OWNER_ACCOUNT_ID`, `OWNER_PRIVATE_KEY`
 3. **Add a Volume** mounted at `/data`, so batch entries survive redeploys.
 4. **Settings → Networking → Generate Domain.**
