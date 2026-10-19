@@ -4,7 +4,7 @@
   </defs>
   <g clip-path="url(#frame)">
     <rect width="512" height="512" fill="#FF6A00"/>
-    <g transform="rotate(-6 256 300) translate(-12 14)">
+    <g transform="rotate(-6 256 300) translate(-12 -14)">
 
     <!-- owl head with ear tufts, running off the bottom edge -->
     <path d="M58 560 L52 300 Q50 190 78 92 Q120 128 158 162 Q256 126 352 156 Q392 120 440 84 Q478 200 470 320 L476 560 Z"
@@ -28,6 +28,25 @@
 
     <!-- beak -->
     <path d="M262 340 L298 340 L280 376 Z" fill="#FF6A00" stroke="#141414" stroke-width="10" stroke-linejoin="round"/>
+    </g>
+
+    <!-- EARN on the chest -->
+    <text x="214" y="446" text-anchor="middle" transform="rotate(-6 214 430)"
+          font-family="'Arial Black','Helvetica Neue',Arial,sans-serif" font-weight="900" font-size="68"
+          letter-spacing="1" fill="#141414">EARN</text>
+
+    <!-- gold coin the owl is holding -->
+    <g transform="translate(12 4) scale(0.86) translate(68 68) rotate(14 418 418)">
+      <ellipse cx="420" cy="430" rx="62" ry="62" fill="#B97A00" stroke="#141414" stroke-width="12"/>
+      <circle cx="414" cy="420" r="62" fill="#FFC524" stroke="#141414" stroke-width="12"/>
+      <circle cx="414" cy="420" r="42" fill="none" stroke="#141414" stroke-width="6" opacity="0.35"/>
+      <text x="414" y="444" text-anchor="middle" font-family="'Arial Black',Arial,sans-serif" font-weight="900"
+            font-size="66" fill="#141414">$</text>
+    </g>
+    <!-- sparkles -->
+    <g fill="#FFFFFF" stroke="#141414" stroke-width="5" stroke-linejoin="round">
+      <path d="M468 336 l8 20 20 8 -20 8 -8 20 -8 -20 -20 -8 20 -8 z"/>
+      <path d="M372 380 l5 12 12 5 -12 5 -5 12 -5 -12 -12 -5 12 -5 z"/>
     </g>
   </g>
 </svg>
