@@ -211,6 +211,13 @@ async function join(e) {
 
 async function main() {
   fillDome();
+  if (!CONTRACT_ID) {
+    $("status").textContent = "Launching soon — the gacha contract isn't connected yet.";
+    $("join-timer").textContent = "Opening soon";
+    $("join-btn").disabled = true;
+    $("contract-link").textContent = "";
+    return;
+  }
   $("contract-link").innerHTML = `<a href="${EXPLORER_URL}/address/${CONTRACT_ID}" target="_blank" rel="noopener">${CONTRACT_ID}</a>`;
   $("join-form").onsubmit = join;
   $("join-account").value = savedAccount();
@@ -219,7 +226,7 @@ async function main() {
   try {
     config = await gacha("get_config");
   } catch {
-    $("status").textContent = `Contract ${CONTRACT_ID} not found on this network. Set VITE_CONTRACT_ID.`;
+    $("status").textContent = "Launching soon — the gacha contract isn't live yet.";
     return;
   }
   await loadToken();

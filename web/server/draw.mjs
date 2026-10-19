@@ -17,6 +17,7 @@ const dryRun = args.includes("--dry-run");
 const batch = Number(opt("--batch") ?? batchOf() - 1);
 const site = (process.env.SITE_URL || "").replace(/\/$/, "");
 
+if (!CONTRACT_ID) fail("Set VITE_CONTRACT_ID to your gacha contract account.");
 if (!site) fail("Set SITE_URL to your website URL (e.g. https://earn.up.railway.app).");
 if (Date.now() < batchEnd(batch)) fail(`Batch ${batch} is still open until ${new Date(batchEnd(batch)).toLocaleString()}.`);
 

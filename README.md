@@ -60,29 +60,29 @@ hash of the list it drew from, so anyone can check it against `/api/batches/<id>
 | `set_min_hold`, `set_winners_per_draw`, `transfer_ownership` | owner | |
 | `get_config`, `get_stats`, `get_rounds`, `get_pending_draw`, `get_excluded`, `get_spare_near` | view | |
 
-## 1. Deploy the contract (testnet example, near-cli-rs)
+## 1. Deploy the contract (mainnet, near-cli-rs)
 
 ```bash
 cd contract
 cargo test                                # 14 unit tests
 cargo near build non-reproducible-wasm    # needs: cargo install cargo-near
 
-near account create-account sponsor-by-faucet-service earn-gacha.testnet autogenerate-new-keypair save-to-keychain network-config testnet create
+near account create-account fund-myself gacha.YOUR-TOKEN.near '1 NEAR' autogenerate-new-keypair save-to-keychain sign-as YOUR-TOKEN.near network-config mainnet sign-with-keychain send
 
-near contract deploy earn-gacha.testnet use-file target/near/earn_gacha.wasm \
+near contract deploy gacha.YOUR-TOKEN.near use-file target/near/earn_gacha.wasm \
   with-init-call new json-args '{
-    "owner_id": "YOU.testnet",
-    "token_id": "EARN_TOKEN.testnet",
+    "owner_id": "YOU.near",
+    "token_id": "YOUR-TOKEN.near",
     "min_hold": "1000000000000000000000"
-  }' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
+  }' prepaid-gas '30 Tgas' attached-deposit '0 NEAR' network-config mainnet sign-with-keychain send
 ```
 
 - `min_hold` is in the token's smallest unit (example = 1,000 tokens with 18 decimals).
 - Keep at least 1 NEAR on the contract account for storage and gas.
 - **Register the contract on the $EARN token** so it can receive $EARN:
-  `near contract call-function as-transaction EARN_TOKEN.testnet storage_deposit json-args '{"account_id":"earn-gacha.testnet"}' prepaid-gas '30 Tgas' attached-deposit '0.01 NEAR' ...`
+  `near contract call-function as-transaction YOUR-TOKEN.near storage_deposit json-args '{"account_id":"gacha.YOUR-TOKEN.near"}' prepaid-gas '30 Tgas' attached-deposit '0.01 NEAR' ...`
 - Exclude pools/exchanges: `add_excluded '{"account_ids":["pool.ref-finance.near"]}'`.
-- Point your creator fees at `earn-gacha.testnet`.
+- Point your creator fees at `gacha.YOUR-TOKEN.near`.
 
 ## 2. Deploy the website on Railway
 
@@ -91,7 +91,7 @@ The repo has a `Dockerfile` and `railway.json` at the root (and a root
 
 1. Railway → **New Project → Deploy from GitHub repo** → this repo. Leave **Root Directory** empty.
 2. **Variables:**
-   - `VITE_NETWORK` = `testnet` or `mainnet`
+   - `VITE_NETWORK` = `mainnet`
    - `VITE_CONTRACT_ID` = your contract account
    - `DATA_DIR` = `/data`
    - for auto-draw: `AUTO_DRAW` = `true`, `OWNER_ACCOUNT_ID`, `OWNER_PRIVATE_KEY`

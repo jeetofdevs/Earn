@@ -68,8 +68,9 @@ async function join_(req, res) {
   const body = await readJson(req).catch(() => null);
   const account = String(body?.account || "").trim().toLowerCase();
   if (!isAccountId(account)) return send(res, 400, { error: "That doesn't look like a NEAR wallet address." });
-  if (account === CONTRACT_ID) return send(res, 400, { error: "That's the gacha contract." });
+  if (CONTRACT_ID && account === CONTRACT_ID) return send(res, 400, { error: "That's the gacha contract." });
 
+  if (!CONTRACT_ID) return send(res, 503, { error: "Joining opens soon." });
   const batch = batchOf();
   if (store.has(batch, account)) return send(res, 200, { ok: true, already: true, ...batchInfo(batch, account) });
   if (store.count(batch) >= MAX_ENTRIES_PER_BATCH) return send(res, 409, { error: "This batch is full. Try the next one." });
@@ -187,7 +188,7 @@ http
     }
   })
   .listen(PORT, "0.0.0.0", () => {
-    console.log(`EARN site on :${PORT} · contract ${CONTRACT_ID} · ${BATCH_MS / 60_000}-minute batches`);
+    console.log(`EARN site on :${PORT} · contract ${CONTRACT_ID || "(VITE_CONTRACT_ID not set)"} · ${BATCH_MS / 60_000}-minute batches`);
     if (AUTO_DRAW) {
       if (!OWNER_ACCOUNT_ID || !OWNER_PRIVATE_KEY) console.error("AUTO_DRAW needs OWNER_ACCOUNT_ID and OWNER_PRIVATE_KEY");
       else {
