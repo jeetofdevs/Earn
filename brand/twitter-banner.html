@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;width:1500px;height:500px;overflow:hidden;background:#06120F}
+  .b{position:relative;width:1500px;height:500px;font-family:'Space Grotesk',system-ui,sans-serif;color:#E9FFF6;
+     background:radial-gradient(900px 420px at 70% 115%,#0E5C43 0%,#0A2A21 55%,#06120F 100%)}
+  .grid{position:absolute;inset:0;opacity:.18;background-image:linear-gradient(#00EC97 1px,transparent 1px),linear-gradient(90deg,#00EC97 1px,transparent 1px);background-size:50px 50px;
+     -webkit-mask-image:radial-gradient(700px 300px at 70% 100%,#000,transparent)}
+  .txt{position:absolute;left:470px;top:92px}
+  h1{margin:0;font-size:128px;line-height:1;letter-spacing:-4px;font-weight:700}
+  h1 span{color:#00EC97}
+  p{margin:18px 0 0;font-size:34px;font-weight:500;color:#BFFFE6}
+  p b{color:#00EC97}
+  .tag{display:inline-flex;gap:10px;align-items:center;margin-top:26px;padding:10px 20px;border:2px solid #00EC97;border-radius:999px;font-size:22px;font-weight:700;color:#00EC97;letter-spacing:2px}
+  .logo{position:absolute;left:120px;top:70px;width:300px;height:300px;filter:drop-shadow(0 0 40px rgba(0,236,151,.35))}
+  .cap{position:absolute;border-radius:50%;background:linear-gradient(#3DFFB8 0 50%,#00A86B 50% 100%);box-shadow:0 0 30px rgba(0,236,151,.45)}
+  .cap::after{content:"";position:absolute;left:0;right:0;top:calc(50% - 3px);height:6px;background:#06120F;opacity:.85}
+</style></head>
+<body><div class="b">
+  <div class="grid"></div>
+  <img class="logo" src="logo.svg">
+  <div class="txt">
+    <h1>EARN<span>.</span></h1>
+    <p><b>100%</b> of creator fees &rarr; <b>10</b> random holders.</p>
+    <p style="margin-top:6px">Hold. Enter. Pull the gacha.</p>
+    <div class="tag">BUILT ON NEAR</div>
+  </div>
+  <div class="cap" style="width:120px;height:120px;left:1250px;top:60px"></div>
+  <div class="cap" style="width:70px;height:70px;left:1380px;top:230px;opacity:.85"></div>
+  <div class="cap" style="width:90px;height:90px;left:1200px;top:330px;opacity:.7"></div>
+  <div class="cap" style="width:46px;height:46px;left:1150px;top:215px;opacity:.6"></div>
+</div></body></html>

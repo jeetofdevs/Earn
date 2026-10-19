@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="100%" r="95%">
+      <stop offset="0" stop-color="#0E5C43"/>
+      <stop offset="0.55" stop-color="#0A2A21"/>
+      <stop offset="1" stop-color="#06120F"/>
+    </radialGradient>
+    <linearGradient id="capTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3DFFB8"/>
+      <stop offset="1" stop-color="#00EC97"/>
+    </linearGradient>
+    <clipPath id="top"><rect x="0" y="0" width="512" height="256"/></clipPath>
+    <clipPath id="bottom"><rect x="0" y="256" width="512" height="256"/></clipPath>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- 10 winner dots around the capsule -->
+  <g fill="#00EC97">
+    <circle cx="256" cy="44" r="9"/><circle cx="380.6" cy="84.5" r="9"/>
+    <circle cx="457.6" cy="190.5" r="9"/><circle cx="457.6" cy="321.5" r="9"/>
+    <circle cx="380.6" cy="427.5" r="9"/><circle cx="256" cy="468" r="9"/>
+    <circle cx="131.4" cy="427.5" r="9"/><circle cx="54.4" cy="321.5" r="9"/>
+    <circle cx="54.4" cy="190.5" r="9"/><circle cx="131.4" cy="84.5" r="9"/>
+  </g>
+
+  <!-- gacha capsule: green top half, dark bottom half -->
+  <g filter="url(#glow)">
+    <circle cx="256" cy="256" r="170" fill="url(#capTop)" clip-path="url(#top)"/>
+    <circle cx="256" cy="256" r="170" fill="#00A86B" clip-path="url(#bottom)"/>
+    <circle cx="256" cy="256" r="170" fill="none" stroke="#7BFFD0" stroke-width="10"/>
+    <rect x="86" y="250" width="340" height="12" fill="#06120F" opacity="0.85"/>
+  </g>
+
+  <!-- NEAR-style N -->
+  <defs>
+    <g id="n">
+      <path d="M192 344 V178 L320 334 V168" fill="none" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M192 344 L222 306" fill="none" stroke-width="22" stroke-linecap="round"/>
+      <path d="M320 168 L290 206" fill="none" stroke-width="22" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <use href="#n" stroke="#06120F"/>
+</svg>
