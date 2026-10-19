@@ -64,7 +64,7 @@ async function refresh() {
       gacha("get_rounds", { limit: 10 }),
     ]);
   } catch {
-    $("status").textContent = `Can't reach contract ${CONTRACT_ID}.`;
+    $("status").textContent = "EARN Gacha will be live soon.";
     return;
   }
   $("pool").textContent = earn(pool);
@@ -212,8 +212,8 @@ async function join(e) {
 async function main() {
   fillDome();
   if (!CONTRACT_ID) {
-    $("status").textContent = "Launching soon — the gacha contract isn't connected yet.";
-    $("join-timer").textContent = "Opening soon";
+    $("status").textContent = "EARN Gacha will be live soon.";
+    $("join-timer").textContent = "Will be live soon";
     $("join-btn").disabled = true;
     $("contract-link").textContent = "";
     return;
@@ -226,7 +226,10 @@ async function main() {
   try {
     config = await gacha("get_config");
   } catch {
-    $("status").textContent = "Launching soon — the gacha contract isn't live yet.";
+    $("status").textContent = "EARN Gacha will be live soon.";
+    $("join-timer").textContent = "Will be live soon";
+    $("join-btn").disabled = true;
+    $("contract-link").textContent = "";
     return;
   }
   await loadToken();

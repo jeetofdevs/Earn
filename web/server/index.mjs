@@ -70,7 +70,7 @@ async function join_(req, res) {
   if (!isAccountId(account)) return send(res, 400, { error: "That doesn't look like a NEAR wallet address." });
   if (CONTRACT_ID && account === CONTRACT_ID) return send(res, 400, { error: "That's the gacha contract." });
 
-  if (!CONTRACT_ID) return send(res, 503, { error: "Joining opens soon." });
+  if (!CONTRACT_ID) return send(res, 503, { error: "EARN Gacha will be live soon." });
   const batch = batchOf();
   if (store.has(batch, account)) return send(res, 200, { ok: true, already: true, ...batchInfo(batch, account) });
   if (store.count(batch) >= MAX_ENTRIES_PER_BATCH) return send(res, 409, { error: "This batch is full. Try the next one." });
