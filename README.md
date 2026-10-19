@@ -97,6 +97,18 @@ npm run dev             # local
 npm run build           # static files in web/dist → Vercel / Netlify / GitHub Pages
 ```
 
+### Deploy the website on Railway
+
+The repo root has a `Dockerfile` and `railway.json`, so Railway builds and
+serves the site from `web/` automatically.
+
+1. Railway → **New Project → Deploy from GitHub repo** → pick this repo and branch.
+2. Leave **Root Directory** empty (the repo root).
+3. Under **Variables**, add `VITE_NETWORK` (`testnet` or `mainnet`) and
+   `VITE_CONTRACT_ID` (your deployed contract account). They are baked in at
+   build time, so redeploy after changing them.
+4. **Settings → Networking → Generate Domain**.
+
 ## Things to know
 
 - **Randomness** comes from NEAR's block random seed. It's fine for a
