@@ -3,7 +3,10 @@
 # $EARN — Hold and earn tax rewards on NEAR
 
 Landing page for **$EARN**, a tax rewards token on NEAR: every buy and sell is
-taxed, and the tax goes back to holders. Buy on [justhoot.fun](https://justhoot.fun/).
+taxed, and the tax goes back to holders.
+
+- **CA:** `earn-2.v2-launchpad.justhoot.near`
+- **Buy, live rewards & payouts:** https://justhoot.fun/p/earn-2.v2-launchpad.justhoot.near
 
 | Folder | What it is |
 |---|---|
@@ -27,6 +30,6 @@ leave Root Directory empty → Generate Domain.** No variables or volume needed.
 
 ## Editing
 
-- Text and links: `web/index.html` (buy links point to `https://justhoot.fun/`)
+- Text, CA and links: `web/index.html` (buy/rewards links point to the $EARN page on justhoot.fun)
 - Colors and layout: `web/src/style.css`
 - Logo: `brand/logo.svg` (copy to `web/public/logo.svg`)

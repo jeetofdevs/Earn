@@ -12,6 +12,8 @@ That tax goes back to holders.
 📈 More volume = more rewards
 🦥 No staking, no lockups — just hold
 
-Buy on 👉 justhoot.fun
+CA: earn-2.v2-launchpad.justhoot.near
+🌐 [WEBSITE]
+🛒 justhoot.fun/p/earn-2.v2-launchpad.justhoot.near
 
 Hold. Earn. Repeat.
