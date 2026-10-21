@@ -3,9 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EARN — Tax fees to holders on NEAR</title>
-    <meta name="description" content="100% of $EARN tax fees are paid to holders, pro-rata to what they hold. Automatic. Built on NEAR." />
+    <title>$EARN — Hold and earn tax rewards on NEAR</title>
+    <meta name="description" content="$EARN is a tax rewards token on NEAR. Every buy and sell is taxed, and the tax is rewarded back to holders. Just hold." />
     <link rel="icon" href="/logo.svg" />
+    <meta property="og:title" content="$EARN — Hold and earn tax rewards on NEAR" />
+    <meta property="og:description" content="Every trade is taxed. The tax goes back to holders. Just hold $EARN." />
     <meta property="og:image" content="/logo-512.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -13,62 +15,85 @@
   <body>
     <header class="top">
       <a class="brand" href="/"><img src="/logo.svg" alt="" /><span>EARN<i>.</i></span></a>
-      <a class="btn primary small" href="#check">Check my wallet</a>
+      <nav class="nav">
+        <a href="#how">How it works</a>
+        <a href="#buy">How to buy</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="btn primary small" href="https://justhoot.fun/" target="_blank" rel="noopener">Buy $EARN</a>
     </header>
 
     <main>
       <section class="hero">
         <div class="hero-text">
-          <p class="eyebrow">Tax fees → holders · Built on NEAR</p>
-          <h1><em>100%</em> of tax fees<br />→ every <em>holder</em>.</h1>
-          <p class="lead">Every $EARN trade pays a tax fee. <b>All of it goes back to holders</b>, split by how much you hold. Paid automatically in $EARN — no sign-up, no claiming, no wallet connect.</p>
-
-          <div class="stats">
-            <div><span>Next payout pool</span><b id="pool">—</b><small class="sym">$EARN</small></div>
-            <div><span>Next payout in</span><b id="countdown">—</b><small id="next-at"></small></div>
-            <div><span>Total paid to holders</span><b id="total">—</b><small class="sym">$EARN</small></div>
-            <div><span>Holders paid last time</span><b id="last-count">—</b><small id="rounds-count"></small></div>
+          <p class="eyebrow">Tax rewards token · Built on NEAR</p>
+          <h1>Hold <em>$EARN</em>.<br />Earn from every trade.</h1>
+          <p class="lead">Every buy and sell of $EARN pays a tax. <b>That tax is rewarded back to holders</b> — so the more people trade, the more holders earn. No staking. No lockups. Just hold.</p>
+          <div class="actions left">
+            <a class="btn primary" href="https://justhoot.fun/" target="_blank" rel="noopener">Buy on justhoot.fun</a>
+            <a class="btn" href="#how">How it works</a>
           </div>
         </div>
 
         <div class="flow card">
-          <div class="flow-step"><b>Trades</b><span>every buy &amp; sell pays a tax fee</span></div>
+          <div class="flow-step"><b>Someone trades</b><span>buy or sell $EARN</span></div>
           <div class="flow-arrow">↓</div>
-          <div class="flow-step hot"><b>Fee pool</b><span id="flow-pool">collecting…</span></div>
-          <div class="flow-arrow">↓ <small id="flow-every">every 24h</small></div>
-          <div class="flow-step"><b>All holders</b><span>pro-rata, straight to your wallet</span></div>
-          <p class="note" id="status">Loading…</p>
+          <div class="flow-step hot"><b>Tax is collected</b><span>on every trade</span></div>
+          <div class="flow-arrow">↓</div>
+          <div class="flow-step"><b>Holders earn</b><span>tax rewards go back to $EARN holders</span></div>
+          <div class="coin c1">$</div>
+          <div class="coin c2">$</div>
         </div>
-      </section>
-
-      <section class="card">
-        <h2>How it works</h2>
-        <ol class="steps">
-          <li><b>Fees in.</b> 100% of $EARN tax fees go to the fee wallet. The creator keeps nothing.</li>
-          <li><b>Snapshot.</b> At payout time, every holder's $EARN balance is read on-chain.</li>
-          <li><b>Pro-rata.</b> Your share = your balance ÷ all holders' balance. Hold more, earn more.</li>
-          <li><b>Paid.</b> Your share of the pool is sent to your wallet in $EARN. Nothing to claim.</li>
-        </ol>
-        <p class="muted small" id="rules"></p>
-      </section>
-
-      <section class="card" id="check">
-        <h2>Check my wallet</h2>
-        <p class="muted">Type your NEAR address to see your share and what you've earned. Nothing to sign.</p>
-        <form id="check-form" class="fund">
-          <input id="check-account" type="text" placeholder="yourname.near" autocomplete="off" autocapitalize="off" spellcheck="false" required />
-          <button class="btn primary" type="submit" id="check-btn">Check</button>
-        </form>
-        <div id="check-result" hidden></div>
-      </section>
-
-      <section class="card" id="payouts">
-        <div class="row"><h2>Past payouts</h2><span class="muted" id="wallet-link"></span></div>
-        <div id="rounds" class="rounds"><p class="muted">No payouts yet.</p></div>
       </section>
     </main>
 
-    <footer>Built on NEAR · 100% of tax fees to holders · Paid in $EARN</footer>
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker-track">
+        <span>HOLD</span><span>EARN</span><span>REPEAT</span><span>HOLD</span><span>EARN</span><span>REPEAT</span>
+        <span>HOLD</span><span>EARN</span><span>REPEAT</span><span>HOLD</span><span>EARN</span><span>REPEAT</span>
+      </div>
+    </div>
+
+    <main>
+      <section class="card" id="how">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li><b>Buy $EARN.</b> Pick it up on NEAR with any NEAR wallet.</li>
+          <li><b>Every trade is taxed.</b> Each buy and sell pays a small tax.</li>
+          <li><b>Tax becomes rewards.</b> The tax is rewarded back to people holding $EARN.</li>
+          <li><b>Hold &amp; earn.</b> More volume, more rewards. You don't have to do anything.</li>
+        </ol>
+      </section>
+
+      <section class="why">
+        <div class="card"><span class="ico">📈</span><h3>Volume pays you</h3><p>Every trade — up or down — feeds rewards back to holders.</p></div>
+        <div class="card"><span class="ico">🦥</span><h3>Zero effort</h3><p>No staking, no farming, no lockups. Holding is the whole strategy.</p></div>
+        <div class="card"><span class="ico">⚡</span><h3>Built on NEAR</h3><p>Fast, cheap transactions, so rewards aren't eaten by gas.</p></div>
+      </section>
+
+      <section class="card" id="buy">
+        <div class="row"><h2>How to buy</h2><a class="btn primary small" href="https://justhoot.fun/" target="_blank" rel="noopener">Open justhoot.fun ↗</a></div>
+        <ol class="steps">
+          <li><b>Get a NEAR wallet.</b> Meteor Wallet or HERE Wallet both work.</li>
+          <li><b>Add NEAR.</b> Buy NEAR on an exchange and send it to your wallet.</li>
+          <li><b>Buy $EARN.</b> Go to <a href="https://justhoot.fun/" target="_blank" rel="noopener">justhoot.fun</a>, connect your wallet and buy $EARN with NEAR.</li>
+          <li><b>Hold.</b> That's it. Sit back and earn tax rewards.</li>
+        </ol>
+      </section>
+
+      <section class="card" id="faq">
+        <h2>FAQ</h2>
+        <div class="faq">
+          <details open><summary>What is $EARN?</summary><p>A token on NEAR where the trading tax is rewarded back to holders.</p></details>
+          <details><summary>Where do the rewards come from?</summary><p>From the tax on every $EARN buy and sell. More trading means more rewards.</p></details>
+          <details><summary>Do I need to stake or lock anything?</summary><p>No. Just hold $EARN in your wallet.</p></details>
+          <details><summary>Which chain is it on?</summary><p>NEAR Protocol.</p></details>
+          <details><summary>Where can I buy it?</summary><p>On <a href="https://justhoot.fun/" target="_blank" rel="noopener">justhoot.fun</a>.</p></details>
+        </div>
+      </section>
+    </main>
+
+    <footer>$EARN · Hold. Earn. Repeat. · Built on NEAR<br /><small>Not financial advice. Crypto is risky — only use what you can afford to lose.</small></footer>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
