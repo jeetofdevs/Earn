@@ -1,16 +1,12 @@
-// Minimal NEAR helpers shared by the server and the draw CLI.
-import { Account, FailoverRpcProvider, JsonRpcProvider } from "near-api-js";
-import { CONTRACT_ID, RPC_URLS } from "./config.mjs";
+// NEAR helpers: read-only calls and the fee wallet signer.
+import { Account, FailoverRpcProvider, JsonRpcProvider, actions } from "near-api-js";
+import { FEE_WALLET, FEE_WALLET_PRIVATE_KEY, RPC_URLS } from "./config.mjs";
 
 // Falls back to the next RPC if one is down or rate-limited.
 export const provider = new FailoverRpcProvider(RPC_URLS.map((url) => new JsonRpcProvider({ url })));
 
-export const view = (contractId, method, args = {}) =>
-  provider.callFunction({ contractId, method, args });
+export const view = (contractId, method, args = {}) => provider.callFunction({ contractId, method, args });
 
-export const gacha = (method, args) => view(CONTRACT_ID, method, args);
-
-/** NEAR account id rules (named or 64-char implicit). */
 export function isAccountId(a) {
   return (
     typeof a === "string" &&
@@ -20,24 +16,39 @@ export function isAccountId(a) {
   );
 }
 
-/** True if the contract already drew (or is drawing) `batch`. */
-export async function batchAlreadyDrawn(batch) {
-  const [stats, pending] = await Promise.all([gacha("get_stats"), gacha("get_pending_draw")]);
-  return Boolean(
-    (pending && pending.batch !== null && Number(pending.batch) === batch) ||
-      (stats.last_batch !== null && Number(stats.last_batch) >= batch),
-  );
+export function parseUnits(text, decimals) {
+  const [whole, frac = ""] = String(text || "0").trim().split(".");
+  return BigInt(whole || "0") * 10n ** BigInt(decimals) + BigInt((frac + "0".repeat(decimals)).slice(0, decimals) || "0");
 }
 
-/** Calls `draw` as the owner. Returns the transaction hash. */
-export async function sendDraw({ ownerId, privateKey, accounts, batch }) {
-  const owner = new Account(ownerId, provider, privateKey);
-  const outcome = await owner.callFunctionRaw({
-    contractId: CONTRACT_ID,
-    methodName: "draw",
-    args: { holders: accounts, batch: String(batch) },
-    gas: 300_000_000_000_000n,
+export function formatUnits(raw, decimals, digits = 2) {
+  const v = BigInt(raw || 0), base = 10n ** BigInt(decimals);
+  const frac = (v % base).toString().padStart(decimals, "0").slice(0, digits).replace(/0+$/, "");
+  return (v / base).toLocaleString("en-US") + (frac ? "." + frac : "");
+}
+
+let tokenMeta = null;
+export async function tokenInfo(tokenId) {
+  if (!tokenMeta) tokenMeta = await view(tokenId, "ft_metadata").catch(() => null);
+  return tokenMeta || { symbol: "EARN", decimals: 18 };
+}
+
+export const canSign = () => Boolean(FEE_WALLET && FEE_WALLET_PRIVATE_KEY);
+
+/** Sends many ft_transfer calls to `tokenId` in one transaction. */
+export async function sendTransfers(tokenId, transfers, memo) {
+  const wallet = new Account(FEE_WALLET, provider, FEE_WALLET_PRIVATE_KEY);
+  const acts = transfers.map(([receiver_id, amount]) =>
+    actions.functionCall("ft_transfer", { receiver_id, amount: String(amount), memo }, 10_000_000_000_000n, 1n),
+  );
+  const outcome = await wallet.signAndSendTransaction({
+    receiverId: tokenId,
+    actions: acts,
     waitUntil: "FINAL",
+    throwOnFailure: false,
   });
-  return outcome.transaction.hash;
+  const failed =
+    "Failure" in (outcome.status || {}) ||
+    (outcome.receipts_outcome || []).some((r) => r.outcome?.status && "Failure" in r.outcome.status);
+  return { tx: outcome.transaction?.hash, ok: !failed };
 }

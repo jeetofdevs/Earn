@@ -11,33 +11,26 @@
   <body>
     <header class="top">
       <a class="brand" href="/"><img src="/logo.svg" alt="" /><span>EARN<i>.</i> owner</span></a>
-      <button id="wallet-btn" class="btn primary small">Connect wallet</button>
     </header>
-
     <main>
       <section class="card">
-        <h2>Pull the gacha</h2>
-        <p class="muted" id="who">Connect the owner wallet (Meteor or HERE). Only the owner can draw — the contract rejects anyone else.</p>
-        <div class="me">
-          <div><span>Prize pool</span><b id="pool">—</b></div>
-          <div><span>Last batch drawn</span><b id="last-batch">—</b></div>
-          <div><span>Current batch closes</span><b id="countdown">—</b></div>
-        </div>
-        <div id="batches" class="batches"><p class="muted">Loading batches…</p></div>
+        <h2>Distribute fees to holders</h2>
+        <p class="muted">Preview who gets what, then pay out the fee pool now. Scheduled payouts keep running on their own.</p>
+        <form id="login" class="fund">
+          <input id="password" type="password" placeholder="Owner password" autocomplete="current-password" required />
+          <button class="btn primary" type="submit">Preview payout</button>
+        </form>
         <p class="note left" id="status"></p>
       </section>
 
-      <section class="card" id="result-card" hidden>
-        <h2 id="result-title">Result</h2>
-        <ul class="winners" id="result"></ul>
-      </section>
-
-      <section class="card" id="extra-card" hidden>
-        <h2>Spare NEAR</h2>
-        <p class="muted">NEAR on the contract beyond storage and the 0.5 NEAR reserve (e.g. fees paid in NEAR). Withdraw it, buy $EARN, and send that to the contract.</p>
+      <section class="card" id="plan-card" hidden>
+        <h2>Next payout preview</h2>
+        <div class="me" id="plan-stats"></div>
+        <ul class="winners" id="plan-list"></ul>
         <div class="actions left">
-          <button id="withdraw-btn" class="btn">Withdraw <span id="spare">0</span> NEAR</button>
+          <button id="send-btn" class="btn primary">Distribute now</button>
         </div>
+        <p class="muted small">Payouts go out in batches of 25 per transaction from the fee wallet. Failed batches stay in the pool for the next round.</p>
       </section>
     </main>
     <script type="module" src="/src/owner.js"></script>
